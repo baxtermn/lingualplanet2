@@ -32,6 +32,8 @@ npm start
 
 The launcher uses port 4100 and the games use ports 4101–4104. Run `npm test` for the existing integration tests.
 
+For Railway, keep the root directory at `/vocabulary-games-suite` and use the default `npm start`. Set `GAME_SERVICE` independently on each Railway service to one of `word-defusal`, `word-kitchen`, `semantic-drop`, or `visual-studio`. The entry point starts only that server and defaults to `word-defusal` when the variable is omitted.
+
 ### `vocabulary-battleship/`
 
 The upgraded Vocabulary Battleship application includes:
