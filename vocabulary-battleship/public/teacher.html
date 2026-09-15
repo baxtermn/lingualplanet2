@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚓ Vocab Battleship — Teacher Dashboard</title>
+<script src="/socket.io/socket.io.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ocean:#0a2342;--ocean-mid:#103a6b;--ocean-light:#1a5999;
+  --wave:#2980b9;--foam:#85c1e9;--gold:#f39c12;
+  --hit:#e74c3c;--miss:#7f8c8d;--green:#27ae60;
+}
+html,body{min-height:100%;font-family:'Nunito',sans-serif;background:var(--ocean);color:#fff}
+.bg{position:fixed;inset:0;background:radial-gradient(ellipse at 20% 40%,rgba(41,128,185,.15) 0%,transparent 55%),linear-gradient(180deg,#0a2342,#103a6b 60%,#0a2342);z-index:-1}
+.app{max-width:1100px;margin:0 auto;padding:12px 16px}
+.header{display:flex;align-items:center;justify-content:space-between;padding:8px 0 14px;border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:14px}
+.header h1{font-family:'Bangers',cursive;font-size:32px;color:var(--gold);letter-spacing:2px;text-shadow:2px 2px 0 rgba(0,0,0,.4)}
+.header .hsub{font-size:11px;color:var(--foam);text-transform:uppercase;letter-spacing:1.5px;font-weight:700}
+.layout{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.layout.three{grid-template-columns:1fr 1fr 1fr}
+.card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.11);border-radius:12px;padding:14px}
+.ctitle{font-family:'Bangers',cursive;font-size:16px;letter-spacing:1.5px;color:var(--gold);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.btn{padding:8px 16px;border:none;border-radius:9px;font-family:'Nunito',sans-serif;font-weight:800;font-size:12px;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:.9px}
+.btn:active{transform:scale(.97)}
+.btn-gold{background:var(--gold);color:#fff}
+.btn-gold:hover{background:#e67e22}
+.btn-blue{background:var(--wave);color:#fff}
+.btn-blue:hover{background:var(--ocean-light)}
+.btn-red{background:var(--hit);color:#fff}
+.btn-red:hover{background:#c0392b}
+.btn-green{background:var(--green);color:#fff}
+.btn-green:hover{background:#219a52}
+.btn-sm{padding:5px 10px;font-size:11px}
+.btn-full{width:100%;margin-top:6px}
+.stat-row{display:flex;gap:8px;margin-bottom:12px}
+.stat{flex:1;background:rgba(0,0,0,.25);border-radius:8px;padding:8px;text-align:center}
+.stat .sl{font-size:9px;color:var(--foam);font-weight:700;text-transform:uppercase;letter-spacing:.8px}
+.stat .sv{font-family:'Bangers',cursive;font-size:28px;color:var(--gold);line-height:1;margin-top:2px}
+textarea{width:100%;background:rgba(0,0,0,.3);border:1.5px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-family:'Nunito',sans-serif;font-size:12px;padding:8px;resize:vertical;min-height:100px}
+textarea::placeholder{color:rgba(255,255,255,.35)}
+input[type=text]{width:100%;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:#fff;font-family:'Nunito',sans-serif;font-size:12px;padding:7px 10px}
+input[type=text]:focus{outline:none;border-color:var(--wave)}
+.room-card{background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px;margin-bottom:8px}
+.room-card:last-child{margin-bottom:0}
+.room-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.room-players{font-weight:800;font-size:13px}
+.room-phase{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700}
+.room-phase.placing{background:rgba(41,128,185,.3);color:var(--foam)}
+.room-phase.playing{background:rgba(39,174,96,.3);color:var(--green)}
+.room-phase.finished{background:rgba(127,140,141,.3);color:var(--miss)}
+.pbar{height:8px;background:rgba(255,255,255,.1);border-radius:4px;overflow:hidden;margin:4px 0}
+.pfill{height:100%;background:var(--gold);border-radius:4px;transition:width .4s}
+.room-stats{display:flex;gap:10px;font-size:11px;color:var(--foam);margin-top:4px}
+.log-entry{padding:4px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:11px;display:flex;gap:8px;align-items:center}
+.log-entry:last-child{border-bottom:none}
+.log-time{color:rgba(255,255,255,.3);font-size:10px;min-width:55px}
+.log-words{flex:1}
+.log-result{font-weight:800;font-size:11px}
+.waiting-list{display:flex;flex-wrap:wrap;gap:6px;min-height:32px}
+.w-badge{background:rgba(41,128,185,.3);border:1px solid rgba(41,128,185,.4);border-radius:16px;padding:3px 10px;font-size:11px;font-weight:700}
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+.settings-row:last-child{border-bottom:none}
+.settings-row label{font-size:12px;font-weight:700;color:var(--foam)}
+.toggle{position:relative;width:40px;height:22px}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;background:rgba(127,140,141,.4);border-radius:11px;cursor:pointer;transition:.3s}
+.toggle-slider::before{content:'';position:absolute;width:16px;height:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}
+input:checked+.toggle-slider{background:var(--green)}
+input:checked+.toggle-slider::before{transform:translateX(18px)}
+.toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--gold);color:#fff;font-family:'Bangers',cursive;font-size:16px;letter-spacing:2px;padding:9px 22px;border-radius:28px;z-index:300;display:none;text-shadow:1px 1px 0 rgba(0,0,0,.3)}
+.toast.on{display:block}
+.announce-row{display:flex;gap:8px;margin-top:8px}
+.announce-row input{flex:1}
+@media(max-width:700px){.layout,.layout.three{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="toast" id="toast"></div>
+
+<div class="app">
+  <div class="header">
+    <div>
+      <h1>⚓ Vocab Battleship — Teacher Dashboard</h1>
+      <div class="hsub">Real-time classroom management</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-red btn-sm" onclick="pauseAll()">⏸ Pause All</button>
+      <button class="btn btn-green btn-sm" onclick="resumeAll()">▶ Resume</button>
+      <button class="btn btn-sm" style="background:rgba(243,156,18,.8);color:#fff" onclick="resetAll()">🔄 Reset All</button>
+      <button class="btn btn-sm" style="background:rgba(142,68,173,.8);color:#fff" onclick="endAll()">🏁 End All</button>
+    </div>
+  </div>
+
+  <!-- Stats row -->
+  <div class="stat-row" id="statRow">
+    <div class="stat"><div class="sl">Students Online</div><div class="sv" id="statStudents">0</div></div>
+    <div class="stat"><div class="sl">Active Games</div><div class="sv" id="statGames">0</div></div>
+    <div class="stat"><div class="sl">Waiting</div><div class="sv" id="statWaiting">0</div></div>
+    <div class="stat"><div class="sl">Sentences Spoken</div><div class="sv" id="statSentences">0</div></div>
+  </div>
+
+  <div class="layout three">
+
+    <!-- Vocabulary setup -->
+    <div class="card" style="grid-column:1/3">
+      <div class="ctitle">📝 Vocabulary Setup</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--foam);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">X-Axis Words (columns) — term[TAB]definition, 10 or more</div>
+          <textarea id="vocX" placeholder="term&#9;plain english definition (one per line)">cardiology	study of the heart and its diseases
+dermatitis	inflammation of the skin
+gastritis	inflammation of the stomach lining
+neuralgia	sharp pain along a nerve
+hematology	study of blood and blood disorders
+bronchitis	inflammation of the bronchial tubes
+arthroscopy	joint examination using a small camera
+myalgia	muscle pain or tenderness
+thoracotomy	surgical incision into the chest cavity
+carcinoma	cancer arising from epithelial tissue
+adenectomy	surgical removal of a gland
+otoscopy	examination of the ear canal
+optometry	eye examination and vision care
+pulmonary	relating to the lungs
+histology	study of tissues under a microscope</textarea>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--foam);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Y-Axis Words (rows) — term[TAB]definition, 10 or more</div>
+          <textarea id="vocY" placeholder="term&#9;plain english definition (one per line)">bradycardia	abnormally slow heart rate
+hyperemia	excess blood in a body part
+bilateral	affecting both sides of the body
+neuroma	benign tumor of nerve tissue
+macrocyte	abnormally large red blood cell
+adenoma	benign tumor of glandular tissue
+arthritis	inflammation of one or more joints
+dermatosis	any non-inflammatory skin disease
+anemia	deficiency of red blood cells
+lymphoma	cancer of the lymphatic system
+myopathy	disease affecting muscle tissue
+encephalitis	inflammation of the brain
+gynecology	study of the female reproductive system
+adenitis	inflammation of a gland or lymph node
+bursitis	inflammation of a fluid-filled sac near a joint</textarea>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+        <button class="btn btn-gold" onclick="applyVocab()">⚓ Apply Vocabulary to All Games</button>
+        <div style="font-size:11px;color:var(--foam)" id="vocabStatus">Enter term[TAB]definition per line. Add 10 or more per axis — each game gets 10 randomly selected. Definitions are optional.</div>
+      </div>
+    </div>
+
+    <!-- Game settings -->
+    <div class="card">
+      <div class="ctitle">⚙️ Game Settings</div>
+      <div class="settings-row">
+          <label>Turn timer</label>
+          <label class="toggle"><input type="checkbox" id="setTimer" onchange="saveSettings()"><span class="toggle-slider"></span></label>
+        </div>
+        <div class="settings-row" id="timerSecondsRow" style="display:none;align-items:center">
+          <label style="font-size:11px">Duration</label>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input type="range" id="timerSeconds" min="15" max="120" value="60" step="5"
+              oninput="updateTimerLabel();saveSettings()"
+              style="width:90px;accent-color:var(--gold)">
+            <span id="timerSecondsLabel" style="color:var(--gold);font-weight:800;font-size:14px;min-width:36px">60s</span>
+          </div>
+        </div>
+      <div class="settings-row"><label>Show sentence prompt</label><label class="toggle"><input type="checkbox" id="setPrompt" checked onchange="saveSettings()"><span class="toggle-slider"></span></label></div>
+        <div class="settings-row"><label>🔊 Game speaks sentence</label><label class="toggle"><input type="checkbox" id="setSpeech" checked onchange="saveSettings()"><span class="toggle-slider"></span></label></div>
+        <div class="settings-row" id="voiceSettingsRow">
+          <label style="font-size:11px">Voice</label>
+          <div style="display:flex;align-items:center;gap:6px;flex:1;justify-content:flex-end">
+            <select id="voiceSelect" onchange="saveSettings()" style="background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.2);border-radius:6px;color:#fff;font-family:Nunito,sans-serif;font-size:11px;padding:4px 6px;max-width:160px">
+              <option value="auto">Auto (best available)</option>
+            </select>
+            <button onclick="testVoiceTeacher()" style="background:rgba(41,128,185,.4);border:1px solid rgba(41,128,185,.5);border-radius:6px;color:#fff;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer;white-space:nowrap">▶ Test</button>
+          </div>
+        </div>
+        <div id="voiceNameDisplay" style="font-size:10px;color:var(--foam);padding:3px 0 5px;display:none"></div>
+      <div class="settings-row"><label>Hard mode (no prompt)</label><label class="toggle"><input type="checkbox" id="setHard" onchange="saveSettings()"><span class="toggle-slider"></span></label></div>
+      <div class="settings-row"><label>Power-ups enabled</label><label class="toggle"><input type="checkbox" id="setPowerups" checked onchange="saveSettings()"><span class="toggle-slider"></span></label></div>
+      <div class="settings-row"><label>Show definitions to defender</label><label class="toggle"><input type="checkbox" id="setShowDefs" checked onchange="saveSettings()"><span class="toggle-slider"></span></label></div>
+      <div style="margin-top:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--foam);margin-bottom:5px">📢 Broadcast Announcement</div>
+        <div class="announce-row">
+          <input type="text" id="announceMsg" placeholder="Type a message to all students…">
+          <button class="btn btn-blue btn-sm" onclick="sendAnnounce()">Send</button>
+        </div>
+      </div>
+      <button class="btn btn-gold btn-full" onclick="triggerPairing()">⚡ Pair Students Now</button>
+    </div>
+
+  </div>
+
+  <div class="layout" style="margin-top:14px">
+
+    <!-- Live games -->
+    <div class="card">
+      <div class="ctitle">🎮 Live Games</div>
+      <div id="roomsContainer"><div style="color:var(--foam);font-size:12px;text-align:center;padding:20px">No active games yet</div></div>
+      <div style="margin-top:8px;display:flex;gap:7px">
+        <button class="btn btn-sm btn-blue" onclick="downloadLog()">📊 Export Activity Log</button>
+      </div>
+    </div>
+
+    <!-- Activity log -->
+    <div class="card">
+      <div class="ctitle">🗣 Sentence Activity Log</div>
+      <div style="font-size:10px;color:var(--foam);margin-bottom:8px">Every sentence spoken during the game</div>
+      <div id="logContainer" style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column">
+        <div style="color:var(--foam);font-size:11px;text-align:center;padding:16px">No activity yet</div>
+      </div>
+    </div>
+
+    <!-- Move student tool -->
+    <div class="card" style="margin-top:14px;grid-column:1/-1">
+      <div class="ctitle">↔️ Move a Student to a New Partner</div>
+      <div style="font-size:11px;color:var(--foam);margin-bottom:10px">
+        Move a student from one game and pair them with a late arrival or another student. 
+        Enter the ID of the student to move, and the ID of their new partner.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center">
+        <input type="text" id="moveFromId" placeholder="Move this student (ID)"
+          style="background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:#fff;font-family:Nunito,sans-serif;font-size:12px;padding:7px 10px">
+        <input type="text" id="moveToId" placeholder="Pair with this student (ID)"
+          style="background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:#fff;font-family:Nunito,sans-serif;font-size:12px;padding:7px 10px">
+        <button class="btn btn-gold btn-sm" onclick="moveStudent()">↔️ Move & Pair</button>
+      </div>
+      <div id="moveMsg" style="font-size:12px;margin-top:8px;display:none"></div>
+      <div style="font-size:10px;color:var(--foam);margin-top:6px">
+        💡 Tip: Click any student name in the Online Students list above to auto-fill their ID into the pairing fields.
+        For this tool, click the first student then manually copy their ID here.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Waiting students -->
+  <div class="card" style="margin-top:14px">
+    <div class="ctitle">⏳ Students Waiting for a Pair</div>
+    <div class="waiting-list" id="waitingList"><span style="color:var(--foam);font-size:11px">No students waiting</span></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+
+    <!-- Reconnect tool -->
+    <div class="card">
+      <div class="ctitle">🔌 Reconnect a Student</div>
+      <div style="font-size:11px;color:var(--foam);margin-bottom:10px">
+        Student accidentally refreshed or screen froze? Enter their ID to push them back into their original game with the same partner.
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="reconnectId" placeholder="Student ID e.g. S-1042"
+          style="flex:1;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:#fff;font-family:Nunito,sans-serif;font-size:12px;padding:7px 10px">
+        <button class="btn btn-green btn-sm" onclick="forceReconnect()">🔌 Reconnect</button>
+      </div>
+      <div id="reconnectMsg" style="font-size:12px;margin-top:8px;display:none"></div>
+    </div>
+
+    <!-- Manual pair tool -->
+    <div class="card">
+      <div class="ctitle">🤝 Manual Pair Students</div>
+      <div style="font-size:11px;color:var(--foam);margin-bottom:10px">
+        Force two (or three) specific students into a game together. Enter their IDs separated by commas. This overrides any existing game they are in.
+      </div>
+      <div style="margin-bottom:7px">
+        <input type="text" id="pairIds" placeholder="e.g. S-1001, S-1002"
+          style="width:100%;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);border-radius:7px;color:#fff;font-family:Nunito,sans-serif;font-size:12px;padding:7px 10px">
+      </div>
+      <button class="btn btn-gold btn-sm" style="width:100%" onclick="manualPair()">🤝 Pair These Students</button>
+      <div id="pairMsg" style="font-size:12px;margin-top:8px;display:none"></div>
+      <div class="ctitle" style="margin-top:12px">📋 Online Students</div>
+      <div id="onlineStudents" style="background:rgba(0,0,0,.2);border-radius:8px;padding:8px;max-height:120px;overflow-y:auto;font-size:11px;display:flex;flex-wrap:wrap;gap:5px">
+        <span style="color:var(--foam)">No students connected</span>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+const socket = io();
+socket.emit('teacherJoin');
+
+let activityLog = [];
+let totalSentences = 0;
+
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('on');
+  setTimeout(()=>t.classList.remove('on'),2500);
+}
+
+socket.on('settings',(s)=>{
+  document.getElementById('setTimer').checked = s.timerEnabled;
+  if(document.getElementById('setSpeech')) document.getElementById('setSpeech').checked = s.speechEnabled !== false;
+  if(s.timerSeconds){ document.getElementById('timerSeconds').value=s.timerSeconds; updateTimerLabel(); }
+  document.getElementById('timerSecondsRow').style.display = s.timerEnabled ? 'flex' : 'none';
+  document.getElementById('setPrompt').checked = s.showPrompt;
+  document.getElementById('setHard').checked = s.hardMode;
+  document.getElementById('setPowerups').checked = s.powerupsEnabled;
+  if(s.vocabX){
+    const x = s.vocabX.map((w,i)=>s.defsX&&s.defsX[i]?w+'\t'+s.defsX[i]:w);
+    document.getElementById('vocX').value = x.join('\n');
+  }
+  if(s.vocabY){
+    const y = s.vocabY.map((w,i)=>s.defsY&&s.defsY[i]?w+'\t'+s.defsY[i]:w);
+    document.getElementById('vocY').value = y.join('\n');
+  }
+  if(s.showDefs!==undefined && document.getElementById('setShowDefs')) document.getElementById('setShowDefs').checked = s.showDefs;
+});
+
+socket.on('settingsSaved',()=>toast('✅ Settings saved!'));
+
+socket.on('dashboardUpdate',(data)=>{
+  document.getElementById('statStudents').textContent = data.studentCount;
+  document.getElementById('statGames').textContent = data.rooms.length;
+  document.getElementById('statWaiting').textContent = data.waiting.length;
+  totalSentences = data.activityLog.length;
+  document.getElementById('statSentences').textContent = totalSentences;
+
+  // Rooms
+  const rc = document.getElementById('roomsContainer');
+  if(data.rooms.length===0){
+    rc.innerHTML='<div style="color:var(--foam);font-size:12px;text-align:center;padding:20px">No active games yet</div>';
+  } else {
+    rc.innerHTML = data.rooms.map(r=>{
+      const pct = r.totalShips>0 ? Math.round(r.sunkShips/r.totalShips*100) : 0;
+      const players = r.players.map(p=>`${p.name}`).join(' vs ');
+      const scores = r.players.map(p=>`${p.name}: ${p.score?.hits||0}H/${p.score?.misses||0}M`).join(' · ');
+      return `<div class="room-card">
+        <div class="room-header">
+          <div class="room-players">${players}</div>
+          <div class="room-phase ${r.phase}">${r.phase}</div>
+        </div>
+        <div class="pbar"><div class="pfill" style="width:${pct}%"></div></div>
+        <div class="room-stats">
+          <span>${r.sunkShips}/${r.totalShips} ships sunk</span>
+          <span>·</span>
+          <span>${scores}</span>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn btn-sm" style="background:rgba(243,156,18,.8);color:#fff;flex:1" onclick="resetRoom('${r.id}')">🔄 Reset</button>
+          <button class="btn btn-sm" style="background:rgba(142,68,173,.8);color:#fff;flex:1" onclick="endRoom('${r.id}')">🏁 End</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Activity log
+  activityLog = data.activityLog;
+  const lc = document.getElementById('logContainer');
+  if(activityLog.length===0){
+    lc.innerHTML='<div style="color:var(--foam);font-size:11px;text-align:center;padding:16px">No activity yet</div>';
+  } else {
+    lc.innerHTML = [...activityLog].reverse().map(e=>{
+      const t=new Date(e.time); const ts=`${t.getHours().toString().padStart(2,'0')}:${t.getMinutes().toString().padStart(2,'0')}`;
+      return `<div class="log-entry">
+        <span class="log-time">${ts}</span>
+        <span class="log-words"><b>${e.attackerName}</b> → <span style="color:#7ed6f5">${e.wordX}</span> × <span style="color:#ffd28f">${e.wordY}</span></span>
+        <span class="log-result" style="color:${e.result==='hit'?'var(--hit)':'var(--miss)'}">${e.result==='hit'?'💥 HIT':'🌊 Miss'}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // Waiting
+  const wl = document.getElementById('waitingList');
+  if(data.waiting.length===0){
+    wl.innerHTML='<span style="color:var(--foam);font-size:11px">No students waiting</span>';
+  } else {
+    wl.innerHTML = data.waiting.map(s=>`<div class="w-badge">${s.name} (${s.id})</div>`).join('');
+  }
+
+  // Online students list for manual pair tool
+  const ol=document.getElementById('onlineStudents');
+  if(ol){
+    const allStudents=data.rooms.flatMap(r=>r.players).concat(data.waiting);
+    if(allStudents.length===0){
+      ol.innerHTML='<span style="color:var(--foam)">No students connected</span>';
+    } else {
+      // Deduplicate
+      const seen=new Set();
+      const unique=[];
+      data.rooms.forEach(r=>r.players.forEach(p=>{if(!seen.has(p.id)){seen.add(p.id);unique.push(p);}}));
+      data.waiting.forEach(w=>{if(!seen.has(w.id)){seen.add(w.id);unique.push(w);}});
+      ol.innerHTML=unique.map(s=>`<div style="background:rgba(41,128,185,.3);border-radius:4px;padding:2px 7px;cursor:pointer;font-weight:700" onclick="appendId('${s.id}')" title="Click to add to pair field">${s.name}<br><span style="font-size:9px;opacity:.7">${s.id}</span></div>`).join('');
+    }
+  }
+});
+
+function applyVocab(){
+  const parseLines = (raw) => {
+    const lines = raw.trim().split('\n').map(l=>l.trim()).filter(Boolean);
+    const terms = [], defs = [];
+    lines.forEach(l => {
+      const tab = l.indexOf('\t');
+      if(tab > -1){ terms.push(l.slice(0,tab).trim()); defs.push(l.slice(tab+1).trim()); }
+      else { terms.push(l.trim()); defs.push(''); }
+    });
+    return { terms, defs };
+  };
+  const x = parseLines(document.getElementById('vocX').value);
+  const y = parseLines(document.getElementById('vocY').value);
+  if(x.terms.length<10||y.terms.length<10){ document.getElementById('vocabStatus').textContent='⚠️ Add at least 10 words per axis. Extra words are used for random selection.'; document.getElementById('vocabStatus').style.color='var(--hit)'; return; }
+  socket.emit('updateSettings',{vocabX:x.terms, vocabY:y.terms, defsX:x.defs, defsY:y.defs});
+  document.getElementById('vocabStatus').textContent='✅ Vocabulary applied to all games!';
+  document.getElementById('vocabStatus').style.color='var(--green)';
+  toast('Vocabulary updated!');
+}
+
+// Populate voice dropdown with available voices
+function populateVoices() {
+  if (!window.speechSynthesis) return;
+  const voices = window.speechSynthesis.getVoices();
+  const select = document.getElementById('voiceSelect');
+  if (!select || voices.length === 0) return;
+  // Keep auto option, add all English voices
+  select.innerHTML = '<option value="auto">Auto (best available)</option>';
+  voices.filter(v => v.lang.startsWith('en')).forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.name;
+    opt.textContent = v.name + (v.localService ? '' : ' ☁');
+    select.appendChild(opt);
+  });
+  // Show current best voice
+  const best = getTeacherBestVoice();
+  const display = document.getElementById('voiceNameDisplay');
+  if (display && best) { display.textContent = '→ Currently using: ' + best.name; display.style.display = 'block'; }
+}
+
+function getTeacherBestVoice() {
+  if (!window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  const selected = document.getElementById('voiceSelect')?.value;
+  if (selected && selected !== 'auto') {
+    const v = voices.find(v => v.name === selected);
+    if (v) return v;
+  }
+  // Auto — priority list
+  const priority = ['Samantha (Enhanced)','Samantha','Karen (Enhanced)','Karen','Google US English','Google UK English Female','Microsoft Aria Online (Natural)','Microsoft Jenny Online (Natural)','Microsoft Zira','Microsoft David'];
+  for (const name of priority) { const v = voices.find(v => v.name === name); if (v) return v; }
+  const enhanced = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Enhanced')||v.name.includes('Premium')||v.name.includes('Neural')||v.name.includes('Online')));
+  return enhanced || voices.find(v => v.lang.startsWith('en')) || null;
+}
+
+function testVoiceTeacher() {
+  const voice = getTeacherBestVoice();
+  const display = document.getElementById('voiceNameDisplay');
+  if (!voice) { if(display){display.textContent='⚠️ No voice found';display.style.display='block';} return; }
+  if (display) { display.textContent = '→ Using: ' + voice.name; display.style.display = 'block'; }
+  const utter = new SpeechSynthesisUtterance('Is there something at Mango and Jump?');
+  utter.lang = 'en-US'; utter.rate = 0.85; utter.voice = voice;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utter);
+  // Send selected voice to all students
+  socket.emit('updateSettings', { preferredVoice: document.getElementById('voiceSelect')?.value || 'auto' });
+}
+
+if (window.speechSynthesis) {
+  window.speechSynthesis.addEventListener('voiceschanged', populateVoices);
+  setTimeout(populateVoices, 500);
+}
+
+function saveSettings(){
+  const timerOn = document.getElementById('setTimer').checked;
+  document.getElementById('timerSecondsRow').style.display = timerOn ? 'flex' : 'none';
+  socket.emit('updateSettings',{
+    timerEnabled: timerOn,
+    timerSeconds: parseInt(document.getElementById('timerSeconds').value),
+    showPrompt: document.getElementById('setPrompt').checked,
+    hardMode: document.getElementById('setHard').checked,
+    powerupsEnabled: document.getElementById('setPowerups').checked,
+    speechEnabled: document.getElementById('setSpeech').checked,
+    preferredVoice: document.getElementById('voiceSelect')?.value || 'auto',
+    showDefs: document.getElementById('setShowDefs')?.checked !== false,
+  });
+}
+function updateTimerLabel(){
+  const v = document.getElementById('timerSeconds').value;
+  document.getElementById('timerSecondsLabel').textContent = v + 's';
+}
+
+function triggerPairing(){ socket.emit('triggerPairing'); toast('⚡ Pairing students…'); }
+function pauseAll(){ socket.emit('pauseAll'); toast('⏸ All games paused'); }
+function resumeAll(){ socket.emit('resumeAll'); toast('▶ Games resumed'); }
+function sendAnnounce(){
+  const msg=document.getElementById('announceMsg').value.trim();
+  if(!msg) return;
+  socket.emit('announce',msg);
+  document.getElementById('announceMsg').value='';
+  toast('📢 Announcement sent!');
+}
+
+function resetRoom(rid){ if(!confirm('Reset this game?')) return; socket.emit('resetRoom',{roomId:rid}); toast('🔄 Game reset!'); }
+function endRoom(rid){ if(!confirm('End this game?')) return; socket.emit('endRoom',{roomId:rid}); toast('🏁 Game ended!'); }
+function resetAll(){ if(!confirm('Reset ALL games? All students return to login.')) return; socket.emit('resetAll'); toast('🔄 All games reset!'); }
+function endAll(){ if(!confirm('End ALL games?')) return; socket.emit('endAll'); toast('🏁 All games ended!'); }
+socket.on('resetAllDone',()=>toast('🔄 All games reset!'));
+socket.on('endAllDone',()=>toast('🏁 All games ended!'));
+function forceReconnect(){
+  const id=document.getElementById('reconnectId').value.trim();
+  if(!id)return;
+  socket.emit('forceReconnectStudent',{studentId:id});
+}
+function manualPair(){
+  const raw=document.getElementById('pairIds').value.trim();
+  if(!raw)return;
+  const ids=raw.split(',').map(s=>s.trim()).filter(Boolean);
+  if(ids.length!==2){showMsg('pairMsg','❌ Enter exactly 2 student IDs',false);return;}
+  socket.emit('manualPair',{studentIds:ids});
+}
+// teacherMsg handled above
+function moveStudent(){
+  const from=document.getElementById('moveFromId').value.trim();
+  const to=document.getElementById('moveToId').value.trim();
+  if(!from||!to){showMsg('moveMsg','❌ Enter both student IDs',false);return;}
+  if(from===to){showMsg('moveMsg','❌ Cannot pair a student with themselves',false);return;}
+  if(!confirm(`Move student ${from} and pair them with ${to}?`))return;
+  socket.emit('moveStudent',{fromStudentId:from,toStudentId:to});
+}
+socket.on('teacherMsg',(msg)=>{
+  ['reconnectMsg','pairMsg','moveMsg'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.textContent=msg;el.style.display='block';
+    el.style.color=msg.startsWith('✅')?'var(--green)':'var(--hit)';
+    setTimeout(()=>el.style.display='none',5000);
+  });
+});
+function appendId(id){
+  const field=document.getElementById('pairIds');
+  const current=field.value.trim();
+  field.value=current?(current+', '+id):id;
+}
+function showMsg(id,msg,ok){
+  const el=document.getElementById(id);
+  el.textContent=msg;el.style.display='block';
+  el.style.color=ok?'var(--green)':'var(--hit)';
+  setTimeout(()=>el.style.display='none',4000);
+}
+function downloadLog(){
+  if(!activityLog.length){ toast('No activity to export'); return; }
+  const csv=['Time,Attacker,Word X,Word Y,Result,Room']
+    .concat(activityLog.map(e=>`${e.time},${e.attackerName},${e.wordX},${e.wordY},${e.result},${e.room}`))
+    .join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='vocab_battleship_log.csv'; a.click();
+  toast('📊 Log exported!');
+}
+</script>
+</body>
+</html>

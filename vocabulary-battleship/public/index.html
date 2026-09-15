@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>⚓ Vocab Battleship</title>
+<script src="/socket.io.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ocean:#071d35;--ocean-mid:#0e4167;--ocean-light:#1676a7;--wave:#29a9d6;--foam:#bcecff;--gold:#ffbd3e;--hit:#ff5b66;--miss:#8da9b7;--ship-light:#7896a4;--green:#3ddc97}
+html,body{min-height:100%;font-family:'Nunito',sans-serif;background:var(--ocean);color:#fff;overscroll-behavior:none;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
+.bg{position:fixed;inset:0;background:radial-gradient(ellipse at 15% 40%,rgba(41,128,185,.18) 0%,transparent 55%),radial-gradient(ellipse at 85% 70%,rgba(142,68,173,.12) 0%,transparent 50%),linear-gradient(180deg,#0a2342 0%,#103a6b 60%,#0a2342 100%);z-index:-1}
+
+/* ── SCREENS ── */
+.screen{display:none;min-height:100vh;align-items:center;justify-content:center;flex-direction:column;padding:16px}
+.screen.active{display:flex}
+
+/* ── SHARED COMPONENTS ── */
+.login-box{background:linear-gradient(145deg,rgba(18,75,112,.94),rgba(7,29,53,.96));border:1px solid rgba(188,236,255,.26);border-radius:28px;padding:clamp(24px,5vw,38px);width:100%;max-width:430px;text-align:center;box-shadow:0 28px 80px rgba(0,0,0,.38),inset 0 1px rgba(255,255,255,.08)}
+.logo{font-family:'Bangers',cursive;font-size:52px;color:var(--gold);letter-spacing:3px;text-shadow:3px 3px 0 rgba(0,0,0,.5);line-height:1}
+.logo-sub{font-size:11px;color:var(--foam);letter-spacing:2.5px;text-transform:uppercase;font-weight:700;margin-bottom:24px}
+.ship-art{font-size:48px;margin:8px 0 16px;animation:float 3s ease-in-out infinite;display:block}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.field-group{margin-bottom:14px;text-align:left}
+.field-group label{font-size:11px;font-weight:700;color:var(--foam);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px}
+.field-group input{width:100%;background:rgba(0,0,0,.35);border:1.5px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-family:'Nunito',sans-serif;font-size:14px;padding:9px 12px}
+.field-group input:focus{outline:none;border-color:var(--wave)}
+.mode-picker{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:4px 0 18px}
+.mode-option{position:relative;text-align:left;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.2);color:#fff;border-radius:14px;padding:12px;cursor:pointer;font:inherit;min-height:76px}
+.mode-option strong{display:block;font-size:14px;margin-bottom:3px}.mode-option span{display:block;color:var(--foam);font-size:10px;line-height:1.35}
+.mode-option.on{border-color:var(--gold);background:rgba(255,189,62,.12);box-shadow:inset 0 0 0 1px rgba(255,189,62,.2)}
+.login-note{font-size:11px;line-height:1.5;color:var(--foam);margin:0 0 16px}
+.btn{padding:10px 20px;border:none;border-radius:10px;font-family:'Nunito',sans-serif;font-weight:800;font-size:13px;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:1px;width:100%}
+.btn:active{transform:scale(.97)}
+.btn-gold{background:var(--gold);color:#fff}.btn-gold:hover{background:#e67e22}
+.btn-blue{background:var(--wave);color:#fff}.btn-blue:hover{background:var(--ocean-light)}
+.btn-green{background:var(--green);color:#fff}.btn-green:hover{background:#219a52}
+.btn-red{background:var(--hit);color:#fff}
+.wait-box{text-align:center;max-width:340px}
+.wait-box h2{font-family:'Bangers',cursive;font-size:32px;color:var(--gold);letter-spacing:2px;margin-bottom:8px}
+.spinner{font-size:40px;animation:spin 2s linear infinite;display:block;margin:16px auto}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+.partner-box{background:rgba(16,58,107,.9);border:3px solid var(--gold);border-radius:20px;padding:36px 28px;width:100%;max-width:420px;text-align:center}
+.partner-box h2{font-family:'Bangers',cursive;font-size:36px;color:var(--gold);letter-spacing:3px;margin-bottom:6px}
+.pb-sub{font-size:12px;color:var(--foam);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:24px}
+.partner-card{background:rgba(0,0,0,.3);border:2px solid rgba(255,255,255,.15);border-radius:14px;padding:20px;margin-bottom:20px}
+.partner-avatar{width:64px;height:64px;border-radius:50%;background:var(--ocean-light);border:3px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Bangers',cursive;font-size:22px;color:var(--gold);margin:0 auto 12px}
+.partner-name{font-family:'Bangers',cursive;font-size:28px;letter-spacing:2px;color:#fff}
+.partner-id{font-size:12px;color:var(--foam);margin-top:4px;font-weight:700}
+.partner-class{font-size:11px;color:rgba(255,255,255,.5);margin-top:2px}
+.my-info{font-size:13px;color:var(--foam);margin-bottom:6px}
+.my-info strong{color:#fff}
+
+/* ── GRID ── */
+.board-wrap{background:rgba(10,35,66,.7);border:2px solid rgba(41,128,185,.3);border-radius:10px;padding:5px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.board-wrap table{border-collapse:collapse;table-layout:auto;width:auto;min-width:100%}
+.board-wrap th{font-weight:800;text-transform:uppercase;text-align:center;color:var(--foam);background:rgba(255,255,255,.05);white-space:nowrap;letter-spacing:.4px}
+.board-wrap th.rh{text-align:right;white-space:nowrap;position:sticky;left:0;background:rgba(10,35,66,.95);z-index:2}
+td.cell{border:1px solid rgba(41,128,185,.2);background:rgba(16,58,107,.45);cursor:pointer;text-align:center;vertical-align:middle;transition:background .15s;white-space:nowrap}
+td.cell.atk:hover{background:rgba(41,128,185,.38);border-color:var(--wave)}
+td.cell.ship-here{background:rgba(44,62,80,.85);border-color:rgba(84,110,122,.5)}
+td.cell.selected{background:rgba(39,174,96,.3);border-color:var(--green)}
+td.cell.pending{background:rgba(243,156,18,.25);border-color:var(--gold);animation:glow .65s infinite alternate}
+@keyframes glow{from{box-shadow:inset 0 0 4px rgba(243,156,18,.4)}to{box-shadow:inset 0 0 10px rgba(243,156,18,.8)}}
+td.cell.hit{background:rgba(231,76,60,.6)!important;border-color:var(--hit)!important}
+td.cell.miss{background:rgba(127,140,141,.2)!important;border-color:rgba(127,140,141,.3)!important}
+
+/* ── SHARED SIDEBAR CARDS ── */
+.card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.11);border-radius:12px;padding:12px}
+.ctitle{font-family:'Bangers',cursive;font-size:14px;letter-spacing:1.5px;color:var(--gold);margin-bottom:7px;display:flex;align-items:center;gap:5px}
+.ship-sel{display:flex;flex-direction:column;gap:5px}
+.sopt{display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 9px;cursor:pointer;transition:all .15s}
+.sopt:hover:not(.done){border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.07)}
+.sopt.on{border-color:var(--gold);background:rgba(243,156,18,.15)}
+.sopt.done{opacity:.45;cursor:default}
+.snm{font-size:11px;font-weight:700}
+.sblk{display:flex;gap:2px}
+.sb{width:11px;height:12px;border-radius:2px;background:var(--ship-light);border:1px solid rgba(255,255,255,.25)}
+.dir-row{display:flex;gap:4px;margin-top:5px}
+.db{flex:1;padding:5px;font-size:10px;font-weight:700;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:var(--foam);cursor:pointer;text-align:center;text-transform:uppercase;letter-spacing:.5px;transition:all .15s}
+.db.on{background:rgba(41,128,185,.3);border-color:var(--wave);color:#fff}
+.powerup-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.pu{background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:6px 3px;text-align:center;cursor:pointer;transition:all .15s}
+.pu:hover:not(.used){border-color:var(--gold);background:rgba(243,156,18,.1)}
+.pu.used{opacity:.4;cursor:default}
+.pu-icon{font-size:18px}.pu-name{font-size:8.5px;font-weight:700;color:var(--foam);text-transform:uppercase;letter-spacing:.4px}.pu-count{font-size:10px;color:var(--gold);font-weight:800}
+.opp-card{background:rgba(0,0,0,.2);border-radius:8px;padding:9px;display:flex;align-items:center;gap:9px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--ocean-light);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0}
+.ships-bar{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;margin:6px 0 8px}
+.sp{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);border-radius:16px;padding:3px 9px;font-size:9.5px;font-weight:700;color:var(--foam)}
+.sp.sunk{opacity:.45;text-decoration:line-through}
+.sp-blks{display:flex;gap:2px}
+.spb{width:9px;height:9px;border-radius:2px;background:var(--ship-light);border:1px solid rgba(255,255,255,.2)}
+.sp.sunk .spb{background:var(--hit)}
+
+/* ── ATTACKER MODAL ── */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:90;display:none}
+.modal-backdrop.on{display:block}
+.speak-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--ocean-mid);border:3px solid var(--gold);border-radius:20px;max-width:430px;width:94%;z-index:100;display:none;overflow:hidden}
+.speak-modal.on{display:block;animation:popIn .25s ease}
+@keyframes popIn{from{transform:translate(-50%,-50%) scale(.82);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+.modal-banner{background:rgba(243,156,18,.16);border-bottom:1px solid rgba(243,156,18,.3);padding:12px 16px;text-align:center}
+.modal-phase{font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:2px}
+.modal-title{font-family:'Bangers',cursive;font-size:24px;letter-spacing:2px;color:#fff;margin-top:2px}
+.modal-body{padding:16px}
+.who-row{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.25);border-radius:10px;padding:9px;margin-bottom:12px}
+.who-role{font-size:10px;color:var(--foam);text-transform:uppercase;letter-spacing:1px;font-weight:700}
+.who-name{font-size:13px;font-weight:800;margin-top:1px}
+.say-box{background:rgba(0,0,0,.3);border:2px dashed rgba(243,156,18,.5);border-radius:12px;padding:14px;text-align:center;margin-bottom:12px}
+.say-label{font-size:9.5px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px}
+.say-sentence{font-size:17px;font-weight:700;line-height:1.5;color:#fff}
+.wx{color:#7ed6f5;background:rgba(126,214,245,.14);padding:1px 6px;border-radius:4px;font-style:italic}
+.wy{color:#ffd28f;background:rgba(255,210,143,.14);padding:1px 6px;border-radius:4px;font-style:italic}
+.wfd{background:rgba(0,0,0,.25);border-radius:10px;padding:12px;text-align:center;font-size:13px;color:var(--foam)}
+.wfd-icon{font-size:32px;margin-bottom:6px;animation:pulse 1.2s infinite}
+
+/* ── DEFENDER BAR ── */
+.defend-bar{position:fixed;bottom:0;left:0;right:0;background:var(--ocean-mid);border-top:3px solid var(--hit);z-index:200;padding:12px 16px 24px;display:none}
+.defend-bar.on{display:block;animation:slideUp .3s ease}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.defend-bar-inner{max-width:600px;margin:0 auto}
+.dbl{font-family:'Bangers',cursive;font-size:18px;letter-spacing:1.5px;color:#fff;margin-bottom:4px}
+.dbl span{color:var(--gold)}
+.dbh{font-size:11px;color:var(--foam);margin-bottom:10px}
+.def-btns{display:flex;gap:10px}
+.def-btn{flex:1;padding:14px 8px;border:none;border-radius:12px;font-family:'Bangers',cursive;font-size:22px;letter-spacing:1.5px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;align-items:center;gap:3px}
+.def-btn:active{transform:scale(.96)}
+.def-hit{background:var(--hit);color:#fff}.def-hit:hover{background:#c0392b}
+.def-miss{background:rgba(127,140,141,.55);color:#fff}.def-miss:hover{background:rgba(127,140,141,.8)}
+
+/* ── FLASH / TOAST ── */
+.flash{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Bangers',cursive;font-size:68px;letter-spacing:4px;pointer-events:none;z-index:300;display:none;text-shadow:4px 4px 0 rgba(0,0,0,.4)}
+.flash.on{display:block;animation:flashA .7s ease forwards}
+@keyframes flashA{0%{opacity:0;transform:translate(-50%,-50%) scale(.5)}30%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}70%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0}}
+.toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--gold);color:#fff;font-family:'Bangers',cursive;font-size:16px;letter-spacing:2px;padding:9px 22px;border-radius:28px;z-index:400;display:none;text-shadow:1px 1px 0 rgba(0,0,0,.3);white-space:nowrap;max-width:90vw;text-align:center}
+.toast.on{display:block;animation:slideD .3s ease}
+@keyframes slideD{from{top:0;opacity:0}to{top:14px;opacity:1}}
+.announce{position:fixed;top:0;left:0;right:0;background:#c0392b;color:#fff;font-family:'Bangers',cursive;font-size:18px;letter-spacing:2px;padding:10px 20px;text-align:center;z-index:500;display:none}
+.announce.on{display:block}
+.gameover-box{text-align:center;max-width:380px}
+.gameover-box h2{font-family:'Bangers',cursive;font-size:54px;color:var(--gold);letter-spacing:3px}
+.go-sub{font-size:14px;color:var(--foam);margin:8px 0 20px}
+.paused{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:600;display:none;align-items:center;justify-content:center;flex-direction:column}
+.paused.on{display:flex}
+.paused h2{font-family:'Bangers',cursive;font-size:52px;color:var(--gold);letter-spacing:3px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite}
+.board-lbl{font-family:'Bangers',cursive;font-size:16px;letter-spacing:1.5px;color:var(--gold);margin-bottom:4px;display:flex;align-items:center;gap:7px}
+.sc{background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 12px;text-align:center}
+.sc .sl{font-size:9px;color:var(--foam);font-weight:700;text-transform:uppercase;letter-spacing:.8px}
+.sc .sv{font-family:'Bangers',cursive;font-size:20px;color:var(--gold);line-height:1}
+.turn-main{font-family:'Bangers',cursive;font-size:15px;letter-spacing:1px;color:var(--gold)}
+.turn-sub{font-size:10px;color:var(--foam);margin-top:1px}
+.timer-ring{width:36px;height:36px;border-radius:50%;border:2.5px solid var(--gold);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:var(--gold);font-family:'Bangers',cursive;flex-shrink:0}
+.timer-ring.urg{border-color:var(--hit);color:var(--hit);animation:pulse .5s infinite}
+.ph{flex:1;padding:5px 3px;border-radius:7px;text-align:center;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:rgba(255,255,255,.3);transition:all .3s}
+.ph.active{border-color:var(--gold);background:rgba(243,156,18,.17);color:var(--gold)}
+.ph.done{border-color:var(--green);background:rgba(39,174,96,.12);color:var(--green)}
+.how-to-play{font-size:11px;line-height:1.7;color:var(--foam)}
+.how-step{display:flex;gap:6px;margin-bottom:4px;align-items:flex-start}
+.hs-num{color:var(--gold);font-weight:800;min-width:16px;font-size:12px}
+
+/* ═══════════════════════════════════════════
+   DESKTOP LAYOUT (768px+)
+═══════════════════════════════════════════ */
+@media(min-width:769px){
+  #gameScreen{align-items:flex-start;padding:8px 8px 140px}
+  .game-wrap{width:100%;max-width:1100px;margin:0 auto}
+  .game-header{display:flex;align-items:center;justify-content:space-between;padding:6px 0 8px;flex-wrap:wrap;gap:6px}
+  .game-header h1{font-family:'Bangers',cursive;font-size:28px;color:var(--gold);letter-spacing:2px;text-shadow:2px 2px 0 rgba(0,0,0,.4)}
+  .scores-row{display:flex;gap:8px}
+  .game-layout{display:grid;grid-template-columns:1fr 300px;gap:12px}
+  .sidebar{display:flex;flex-direction:column;gap:10px}
+  .turn-banner{display:flex;align-items:center;justify-content:space-between;background:rgba(243,156,18,.13);border:1px solid rgba(243,156,18,.28);border-radius:9px;padding:8px 12px;margin-bottom:6px}
+  .phase-row{display:flex;gap:5px;margin-bottom:7px}
+  .board-wrap th{font-size:11px;padding:5px 8px;min-width:72px}
+  .board-wrap th.rh{min-width:82px;width:82px;padding-right:8px}
+  td.cell{min-width:72px;height:36px;font-size:14px}
+  /* hide mobile-only elements */
+  .mobile-only{display:none!important}
+}
+
+/* ═══════════════════════════════════════════
+   MOBILE LAYOUT (up to 768px)
+═══════════════════════════════════════════ */
+@media(max-width:768px){
+  #gameScreen{align-items:flex-start;padding:4px 4px 180px}
+  .game-wrap{width:100%;max-width:100%}
+  .game-header{display:flex;align-items:center;justify-content:space-between;padding:4px 4px 6px;flex-wrap:wrap;gap:4px}
+  .game-header h1{font-family:'Bangers',cursive;font-size:20px;color:var(--gold);letter-spacing:2px}
+  .scores-row{display:flex;gap:5px}
+  .sc{padding:3px 8px}
+  .sc .sl{font-size:8px}
+  .sc .sv{font-size:16px}
+  /* Single column — no sidebar on mobile */
+  .game-layout{display:block}
+  .sidebar{display:none} /* hidden — accessed via bottom sheet */
+  .turn-banner{display:flex;align-items:center;justify-content:space-between;background:rgba(243,156,18,.13);border:1px solid rgba(243,156,18,.28);border-radius:9px;padding:6px 10px;margin-bottom:5px}
+  .phase-row{display:flex;gap:3px;margin-bottom:5px}
+  .board-lbl{font-size:13px;margin-bottom:3px}
+
+  /* Mobile grid — abbreviated headers, larger tap targets */
+  .board-wrap{overflow:visible;padding:4px;border-radius:14px}
+  .board-wrap table{width:100%;min-width:0;table-layout:fixed}
+  .board-wrap th{font-size:10px;padding:4px 1px;min-width:0;max-width:none;overflow:hidden;text-overflow:ellipsis}
+  .board-wrap th.rh{min-width:34px;width:34px;padding-right:3px;font-size:10px}
+  td.cell{min-width:0;height:auto;aspect-ratio:1/1;font-size:12px;border-color:rgba(188,236,255,.22)}
+
+  /* Mobile grid tabs */
+  .mobile-grid-tabs{display:flex;gap:6px;margin-bottom:6px}
+  .mgt{flex:1;padding:8px;border:none;border-radius:10px;font-family:'Bangers',cursive;font-size:14px;letter-spacing:1px;cursor:pointer;transition:all .15s;text-align:center}
+  .mgt.active{background:var(--gold);color:#fff}
+  .mgt.inactive{background:rgba(255,255,255,.08);color:var(--foam)}
+
+  /* Selected coordinate banner on mobile */
+  .coord-banner{background:rgba(243,156,18,.15);border:1px solid rgba(243,156,18,.3);border-radius:8px;padding:7px 10px;margin-bottom:5px;font-size:12px;color:var(--foam);text-align:center;display:none}
+  .coord-banner.on{display:block}
+  .coord-banner strong{color:#fff}
+  .coord-banner .cw{color:var(--gold);font-weight:800;font-style:italic}
+
+  /* Bottom action bar on mobile (replaces sidebar for key actions) */
+  .mobile-action-bar{position:fixed;bottom:0;left:0;right:0;background:var(--ocean-mid);border-top:2px solid rgba(41,128,185,.3);z-index:150;padding:6px 8px 12px}
+  .mab-row{display:flex;gap:6px;align-items:center;justify-content:space-between;max-width:500px;margin:0 auto}
+  .mab-opp{display:flex;align-items:center;gap:7px;flex:1}
+  .mab-name{font-size:11px;font-weight:700;color:#fff}
+  .mab-status{font-size:9px;color:var(--green);font-weight:700}
+  .mab-scores{display:flex;gap:5px}
+  .mab-sc{background:rgba(0,0,0,.25);border-radius:6px;padding:3px 7px;text-align:center}
+  .mab-sc .ml{font-size:8px;color:var(--foam);font-weight:700;text-transform:uppercase}
+  .mab-sc .mv{font-family:'Bangers',cursive;font-size:16px;color:var(--gold);line-height:1}
+  .mab-menu-btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:20px;padding:6px 10px;cursor:pointer;border:none}
+
+  /* Bottom sheet for ship placement / powerups / info on mobile */
+.mobile-action-bar{display:none}
+.game-active .mobile-action-bar{display:block}
+.mobile-sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:160;display:none}
+  .mobile-sheet-backdrop.on{display:block}
+  .mobile-sheet{position:fixed;bottom:0;left:0;right:0;background:var(--ocean-mid);border-top:3px solid var(--gold);border-radius:20px 20px 0 0;z-index:170;padding:16px;max-height:80vh;overflow-y:auto;display:none}
+  .mobile-sheet.on{display:block;animation:slideUp .3s ease}
+  .sheet-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .sheet-title{font-family:'Bangers',cursive;font-size:20px;color:var(--gold);letter-spacing:2px}
+  .sheet-close{background:rgba(255,255,255,.1);border:none;color:#fff;font-size:20px;width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+  /* hide desktop-only elements on mobile */
+  .desktop-only{display:none!important}
+}
+@media(max-width:390px){.screen{padding:10px}.logo{font-size:42px}.login-box{border-radius:22px}.game-header h1{font-size:17px}.board-wrap th.rh{width:30px}.mobile-action-bar{padding-bottom:max(10px,env(safe-area-inset-bottom))}}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="toast" id="toast"></div>
+<div class="flash" id="flash"></div>
+<div class="announce" id="announce"></div>
+<div class="paused" id="paused"><h2>⏸ GAME PAUSED</h2><p style="color:var(--foam);margin-top:8px">Your teacher will resume shortly</p></div>
+
+<!-- SPEAK MODAL -->
+<div class="modal-backdrop" id="backdrop"></div>
+<div class="speak-modal" id="speakModal">
+  <div class="modal-banner"><div class="modal-phase">Your turn — speak!</div><div class="modal-title">📣 Say It Out Loud!</div></div>
+  <div class="modal-body">
+    <div class="who-row"><div class="avatar" id="mAvatar">??</div><div><div class="who-role">Say this to your partner:</div><div class="who-name" id="mName">—</div></div></div>
+    <div class="say-box" id="sayBox">
+      <div class="say-label">🎤 Say this sentence:</div>
+      <div class="say-sentence">"Is there something at <span class="wx" id="mWordX">—</span> and <span class="wy" id="mWordY">—</span>?"</div>
+    </div>
+    <div class="wfd"><div class="wfd-icon">⏳</div>Waiting for your partner to check their grid…<br><small style="color:rgba(255,255,255,.4);font-size:10px;margin-top:4px;display:block">Say the sentence out loud first!</small></div>
+  </div>
+</div>
+
+<!-- DEFEND BAR -->
+<div class="defend-bar" id="defendBar">
+  <div class="defend-bar-inner">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+      <div class="dbl">🛡 <span id="dbAtkName">Partner</span> is asking…</div>
+      <button onclick="repeatSentence()" style="background:rgba(243,156,18,.2);border:1.5px solid var(--gold);border-radius:8px;color:var(--gold);font-family:Nunito,sans-serif;font-weight:800;font-size:11px;padding:5px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px">🔊 Hear again</button>
+    </div>
+    <div id="defBarDefs" style="background:rgba(0,0,0,.25);border-radius:8px;padding:7px 10px;margin-bottom:7px;font-size:12px;line-height:1.6;min-height:36px;color:#e8f4f8">
+      <span style="opacity:.5;font-style:italic">Loading definitions…</span>
+    </div>
+    <div class="dbh">👂 Listen to your partner, then check your fleet above!</div>
+    <div class="def-btns">
+      <button class="def-btn def-hit" onclick="sendDefend(true)"><div style="font-size:28px">💥</div><div>HIT!</div></button>
+      <button class="def-btn def-miss" onclick="sendDefend(false)"><div style="font-size:28px">🌊</div><div>MISS!</div></button>
+    </div>
+  </div>
+</div>
+
+<!-- MOBILE BOTTOM SHEET -->
+<div class="mobile-sheet-backdrop" id="sheetBackdrop" onclick="closeSheet()"></div>
+<div class="mobile-sheet" id="mobileSheet">
+  <div class="sheet-header">
+    <div class="sheet-title" id="sheetTitle">⚙️ Options</div>
+    <button class="sheet-close" onclick="closeSheet()">✕</button>
+  </div>
+  <div id="sheetContent"></div>
+</div>
+
+<!-- LOGIN -->
+<div class="screen active" id="loginScreen">
+  <div class="login-box">
+    <div class="logo">⚓ VOCAB<br>BATTLESHIP</div>
+    <div class="logo-sub">Vocabulary Speaking Game</div>
+    <span class="ship-art">🚢</span>
+    <div class="mode-picker" aria-label="Choose game mode">
+      <button class="mode-option on" id="modeMulti" type="button" onclick="setGameMode('multiplayer')"><strong id="multiTitle">⚔ Play someone online</strong><span id="multiDescription">Join a private match with another learner.</span></button>
+      <button class="mode-option" id="modeSolo" type="button" onclick="setGameMode('solo')"><strong>🤖 Play solo</strong><span>Practise immediately against Captain Lexi.</span></button>
+    </div>
+    <div class="field-group"><label>Your Name</label><input id="loginName" type="text" placeholder="e.g. Yamada Yuki" autocomplete="off"></div>
+    <div class="field-group"><label>Student ID</label><input id="loginId" type="text" placeholder="e.g. S-1042" autocomplete="off"></div>
+    <div class="field-group"><label>Class</label><input id="loginClass" type="text" placeholder="e.g. 2B" autocomplete="off"></div>
+    <p class="login-note" id="modeNote">Your teacher can run many private matches at the same time.</p>
+    <button class="btn btn-gold" id="loginButton" onclick="doLogin()">⚓ Find my opponent</button>
+    <div id="loginError" style="color:#e74c3c;font-size:12px;margin-top:8px;display:none"></div>
+  </div>
+</div>
+
+<!-- WAITING -->
+<div class="screen" id="waitScreen">
+  <div class="wait-box">
+    <span class="ship-art" style="font-size:52px">⚓</span>
+    <h2>Finding Your Opponent…</h2>
+    <span class="spinner">🌊</span>
+    <p style="color:var(--foam);font-size:13px;margin-top:8px">Waiting for another student to join.<br>Your teacher will start the game soon!</p>
+    <div id="waitName" style="margin-top:16px;font-weight:800;font-size:14px;color:var(--gold)"></div>
+  </div>
+</div>
+
+<!-- PARTNER SCREEN -->
+<div class="screen" id="partnerScreen">
+  <div class="partner-box">
+    <h2>⚓ YOUR OPPONENT</h2>
+    <div class="pb-sub">You have been matched!</div>
+    <div id="partnerCards"></div>
+    <div class="my-info">You: <strong id="myNameDisplay">—</strong> · <strong id="myIdDisplay">—</strong></div>
+    <button class="btn btn-green" id="beginBtn" onclick="clickBegin()" style="margin-top:16px;font-size:16px;padding:14px">⚓ BEGIN BATTLE!</button>
+    <div id="waitPartnerMsg" style="font-size:12px;color:var(--foam);margin-top:10px;display:none">⏳ Waiting for your partner to click Begin…</div>
+  </div>
+</div>
+
+<!-- GAME SCREEN -->
+<div class="screen" id="gameScreen">
+<div class="game-wrap">
+
+  <!-- Header (both layouts) -->
+  <div class="game-header">
+    <h1>⚓ Vocab Battleship</h1>
+    <div class="scores-row">
+      <div class="sc"><div class="sl">Hits</div><div class="sv" id="sHits">0</div></div>
+      <div class="sc"><div class="sl">Misses</div><div class="sv" id="sMiss">0</div></div>
+      <div class="sc"><div class="sl">Sunk</div><div class="sv" id="sSunk">0</div></div>
+      <div class="timer-ring" id="timerEl" style="display:none">—</div>
+      <button id="muteBtn" onclick="toggleMute()" title="Toggle music" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-size:18px;width:36px;height:36px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">🔊</button>
+    </div>
+  </div>
+
+  <div class="ships-bar" id="shipsBar"></div>
+
+  <!-- DESKTOP layout -->
+  <div class="game-layout desktop-only">
+    <div>
+      <div class="turn-banner">
+        <div><div class="turn-main" id="turnTextD">🚢 Place your ships!</div><div class="turn-sub" id="turnSubD">Tap Your Fleet grid to position each ship</div></div>
+      </div>
+      <div class="phase-row"><div class="ph" id="ph1">1 · Select</div><div class="ph" id="ph2">2 · Speak</div><div class="ph" id="ph3">3 · Defend</div><div class="ph" id="ph4">4 · Result</div></div>
+      <div class="board-lbl"><div class="dot"></div>Enemy Waters — click to attack</div>
+      <div class="board-wrap"><table id="atkTblD"></table></div>
+      <div class="board-lbl" style="margin-top:12px">Your Fleet</div>
+      <div class="board-wrap"><table id="myTblD"></table></div>
+    </div>
+    <div class="sidebar">
+      <div class="card">
+        <div class="ctitle">📋 How to Play</div>
+        <div class="how-to-play">
+          <div class="how-step"><span class="hs-num">1.</span><span>Click a square on <b style="color:#fff">Enemy Waters</b>.</span></div>
+          <div class="how-step"><span class="hs-num">2.</span><span>Say: <span style="color:#7ed6f5;font-style:italic">"Is there something at [X] and [Y]?"</span></span></div>
+          <div class="how-step"><span class="hs-num">3.</span><span>Partner clicks <b style="color:var(--hit)">Hit</b> or <b style="color:#aaa">Miss</b> on the bar at the bottom.</span></div>
+          <div class="how-step"><span class="hs-num">4.</span><span>Sink all 5 ships to win! 🏆</span></div>
+        </div>
+      </div>
+      <div class="card" id="placingCardD">
+        <div class="ctitle">🚢 Place Your Ships</div>
+        <div class="dir-row"><div class="db on" id="dirHD" onclick="setDir('H',this)">↔ Horizontal</div><div class="db" id="dirVD" onclick="setDir('V',this)">↕ Vertical</div></div>
+        <div class="ship-sel" style="margin-top:7px">
+          <div class="sopt on" onclick="pickShip(this,'battleship',5)" data-ship="battleship"><span class="snm">⚔ Battleship</span><div class="sblk"><div class="sb"></div><div class="sb"></div><div class="sb"></div><div class="sb"></div><div class="sb"></div></div></div>
+          <div class="sopt" onclick="pickShip(this,'destroyer',4)" data-ship="destroyer"><span class="snm">🛥 Destroyer</span><div class="sblk"><div class="sb"></div><div class="sb"></div><div class="sb"></div><div class="sb"></div></div></div>
+          <div class="sopt" onclick="pickShip(this,'cruiser',3)" data-ship="cruiser"><span class="snm">⛵ Cruiser</span><div class="sblk"><div class="sb"></div><div class="sb"></div><div class="sb"></div></div></div>
+          <div class="sopt" onclick="pickShip(this,'sub1',2)" data-ship="sub1"><span class="snm">🤿 Sub 1</span><div class="sblk"><div class="sb"></div><div class="sb"></div></div></div>
+          <div class="sopt" onclick="pickShip(this,'sub2',2)" data-ship="sub2"><span class="snm">🤿 Sub 2</span><div class="sblk"><div class="sb"></div><div class="sb"></div></div></div>
+        </div>
+        <button class="btn btn-blue" style="margin-top:7px;width:100%" onclick="autoPlace()">🎲 Auto-Place All</button>
+        <button class="btn btn-gold" style="margin-top:5px;width:100%;font-size:12px" id="readyBtnD" onclick="submitShips()">✅ Ready! Start Game</button>
+        <button style="width:100%;margin-top:4px;background:transparent;border:none;color:var(--miss);font-size:11px;font-weight:700;cursor:pointer;padding:4px" onclick="clearShips()">✕ Reset</button>
+      </div>
+      <div class="card" id="powerupCardD" style="display:none">
+        <div class="ctitle">⚡ Power-Ups</div>
+        <div style="font-size:10px;color:var(--foam);margin-bottom:7px">📡 Sink a ship → Radar &nbsp;·&nbsp; 🚀 Sink 3 → Torpedo</div>
+        <div class="powerup-grid">
+          <div class="pu used" id="pu-radar" onclick="activatePowerup('radar')"><div class="pu-icon">📡</div><div class="pu-name">Radar</div><div class="pu-count" id="puc-radar">×0</div></div>
+          <div class="pu used" id="pu-torpedo" onclick="activatePowerup('torpedo')"><div class="pu-icon">🚀</div><div class="pu-name">Torpedo</div><div class="pu-count" id="puc-torpedo">×0</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ctitle">👤 Opponent</div>
+        <div class="opp-card">
+          <div class="avatar" id="oppAvatarD">??</div>
+          <div><div style="font-weight:700;font-size:13px" id="oppNameD">—</div><div style="color:var(--foam);font-size:10px" id="oppIdD">—</div><div id="oppStatusD" style="font-size:10px;font-weight:700;color:var(--miss)">● Connecting…</div></div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn btn-red" style="flex:1;font-size:11px;padding:7px" onclick="studentReset()">🔄 Reset</button>
+          <button style="flex:1;padding:7px;border:none;border-radius:10px;background:rgba(142,68,173,.7);color:#fff;font-family:Nunito,sans-serif;font-weight:800;font-size:11px;cursor:pointer;text-transform:uppercase;letter-spacing:.8px" onclick="studentEndGame()">🏁 End Game</button>
+        </div>
+        <div style="font-size:10px;color:var(--miss);margin-top:4px;text-align:center">Both players return to login</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MOBILE layout -->
+  <div class="mobile-only" id="mobileGameArea">
+    <!-- Turn banner -->
+    <div class="turn-banner">
+      <div><div class="turn-main" id="turnTextM">🚢 Place ships!</div><div class="turn-sub" id="turnSubM">Tap Your Fleet to place ships</div></div>
+    </div>
+    <div class="phase-row"><div class="ph" id="mph1">1</div><div class="ph" id="mph2">2</div><div class="ph" id="mph3">3</div><div class="ph" id="mph4">4</div></div>
+
+    <!-- Grid tabs -->
+    <div class="mobile-grid-tabs">
+      <button class="mgt active" id="tabAtk" onclick="showMobileGrid('atk')">🎯 Enemy Waters</button>
+      <button class="mgt inactive" id="tabMy" onclick="showMobileGrid('my')">🚢 My Fleet</button>
+    </div>
+
+    <!-- Selected coordinate banner -->
+    <div class="coord-banner" id="coordBanner">Tap a square to attack</div>
+
+    <!-- Attack grid -->
+    <div id="mobileAtkWrap">
+      <div class="board-wrap"><table id="atkTblM"></table></div>
+    </div>
+
+    <!-- My fleet grid -->
+    <div id="mobileMyWrap" style="display:none">
+      <div class="board-wrap"><table id="myTblM"></table></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- MOBILE BOTTOM ACTION BAR -->
+<div class="mobile-action-bar mobile-only" id="mobileActionBar">
+  <div class="mab-row">
+    <div class="mab-opp">
+      <div class="avatar" id="oppAvatarM" style="width:30px;height:30px;font-size:10px">??</div>
+      <div>
+        <div class="mab-name" id="oppNameM">—</div>
+        <div class="mab-status" id="oppStatusM">● Connecting…</div>
+      </div>
+    </div>
+    <div class="mab-scores">
+      <div class="mab-sc"><div class="ml">Hits</div><div class="mv" id="mHits">0</div></div>
+      <div class="mab-sc"><div class="ml">Miss</div><div class="mv" id="mMiss">0</div></div>
+      <div class="mab-sc"><div class="ml">Sunk</div><div class="mv" id="mSunk">0</div></div>
+    </div>
+    <button class="mab-menu-btn" onclick="openSheet()">⚙️</button>
+  </div>
+</div>
+
+<!-- GAME OVER -->
+<div class="screen" id="gameoverScreen">
+  <div class="gameover-box">
+    <div style="font-size:72px" id="goEmoji">🏆</div>
+    <h2 id="goTitle">Victory!</h2>
+    <div class="go-sub" id="goSub"></div>
+    <div style="background:rgba(255,255,255,.07);border-radius:12px;padding:14px;margin-bottom:20px;font-size:13px">
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.08)"><span style="color:var(--foam)">Ships sunk</span><span style="color:var(--gold);font-weight:800" id="goSunk">—</span></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.08)"><span style="color:var(--foam)">Hits</span><span id="goHits">—</span></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:var(--foam)">Misses</span><span id="goMiss">—</span></div>
+    </div>
+    <button class="btn btn-gold" onclick="location.reload()">⚓ Play Again</button>
+  </div>
+</div>
+
+<script>
+// ── Device detection ──────────────────────────────────────────────────────
+const IS_MOBILE = window.innerWidth <= 768;
+
+// ── Socket ────────────────────────────────────────────────────────────────
+const socket = io({
+  reconnection: true, reconnectionAttempts: Infinity,
+  reconnectionDelay: 1000, reconnectionDelayMax: 5000, timeout: 10000,
+});
+socket.on('disconnect', () => showReconnectBanner(true));
+socket.on('reconnecting', () => showReconnectBanner(true));
+socket.on('reconnect', () => {
+  showReconnectBanner(false);
+  const n=sessionStorage.getItem('vb_n'),i=sessionStorage.getItem('vb_i'),c=sessionStorage.getItem('vb_c');
+  if(n&&i) socket.emit('studentLogin',{studentId:i,name:n,className:c||'',mode:gameMode,integrationToken:launchToken});
+});
+socket.on('connect', () => showReconnectBanner(false));
+function showReconnectBanner(show){
+  let b=document.getElementById('reconnectBanner');
+  if(!b){b=document.createElement('div');b.id='reconnectBanner';b.style.cssText='position:fixed;top:0;left:0;right:0;background:#e74c3c;color:#fff;font-family:Bangers,cursive;font-size:16px;letter-spacing:2px;padding:10px;text-align:center;z-index:1000;display:none';document.body.appendChild(b);}
+  b.textContent='⚠️ Connection lost — reconnecting…';b.style.display=show?'block':'none';
+}
+
+// ── State ─────────────────────────────────────────────────────────────────
+const GS=10;
+const SHIPS=[{name:'battleship',size:5,label:'⚔ Battleship'},{name:'destroyer',size:4,label:'🛥 Destroyer'},{name:'cruiser',size:3,label:'⛵ Cruiser'},{name:'sub1',size:2,label:'🤿 Sub 1'},{name:'sub2',size:2,label:'🤿 Sub 2'}];
+let me={id:null,name:null,className:null};
+let roomId=null;
+let myGridData=Array.from({length:GS},()=>Array(GS).fill(0));
+let atkGridData=Array.from({length:GS},()=>Array(GS).fill(0));
+let placed={},placedCells={};
+let curShip={name:'battleship',size:5};
+let shipDir='H';
+let isMyTurn=false;
+let phase='login';
+let timerVal=60,timerIv;
+let vocabX=[],vocabY=[],defsX=[],defsY=[],showDefs=true;
+let amDefender=false;
+let opponentName='—';
+let settings={timerEnabled:false,showPrompt:true,hardMode:false,timerSeconds:60,speechEnabled:true,preferredVoice:'Google US English'};
+let activePowerup=null;
+let gridsBuilt=false;
+let mobileGridView='atk'; // 'atk' or 'my'
+let gameMode=sessionStorage.getItem('vb_mode')||'multiplayer';
+const launchToken=new URLSearchParams(location.search).get('lpToken')||'';
+let launchProfile=null;
+if(launchToken){try{launchProfile=JSON.parse(atob(launchToken.split('.')[0].replace(/-/g,'+').replace(/_/g,'/')));}catch(_){launchProfile=null;}}
+
+// ══════════════════════════════════════════════════
+// 🔊 SPEECH SYNTHESIS
+// ══════════════════════════════════════════════════
+// 🔊 SPEECH SYNTHESIS — reliable cross-device
+// ══════════════════════════════════════════════════
+let currentSentence = '';
+let voicesReady = false;
+let voiceCache = null;
+
+// Force load voices — browsers load them async
+function loadVoices() {
+  if (!window.speechSynthesis) return;
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length > 0) { voicesReady = true; voiceCache = null; } // clear cache on reload
+}
+if (window.speechSynthesis) {
+  window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+  loadVoices();
+  // Kick browsers that need a trigger
+  setTimeout(loadVoices, 200);
+  setTimeout(loadVoices, 1000);
+}
+
+// Player A (index 0) = Google US English (female American)
+// Player B (index 1) = Google UK English Male (male British)
+function getVoiceForAttacker(attackerIdx) {
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  const targetName = (attackerIdx % 2 === 0) ? 'Google US English' : 'Google UK English Male';
+  return voices.find(v => v.name === targetName) || voices.find(v => v.lang.startsWith('en')) || null;
+}
+
+function getBestVoice() {
+  return getVoiceForAttacker(currentSpeakerIdx);
+}
+
+let currentSpeakerIdx = 0; // track which player index is speaking
+
+function speakSentence(wordX, wordY, attackerIdx) {
+  if (!settings.speechEnabled || !window.speechSynthesis) return;
+  const sentence = `Is there something at ${wordX} and ${wordY}?`;
+  currentSentence = sentence;
+  if (attackerIdx !== undefined) currentSpeakerIdx = attackerIdx;
+  doSpeak(sentence, currentSpeakerIdx);
+}
+
+function doSpeak(sentence, speakerIdx) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) {
+    setTimeout(() => doSpeak(sentence, speakerIdx), 300);
+    return;
+  }
+  const utter = new SpeechSynthesisUtterance(sentence);
+  utter.lang = 'en-US';
+  utter.rate = 0.85;
+  utter.pitch = 1.0;
+  utter.volume = 1.0;
+  // Player 0 (first attacker) = male, Player 1 = female, alternates
+  const voice = getVoiceForAttacker(speakerIdx !== undefined ? speakerIdx : currentSpeakerIdx);
+  if (voice) utter.voice = voice;
+  window.speechSynthesis.speak(utter);
+}
+
+function repeatSentence() {
+  if (!currentSentence) return;
+  // Only plays on the defender's own screen
+  doSpeak(currentSentence, currentSpeakerIdx);
+  playSoundClick();
+}
+
+function testVoice() {
+  doSpeak('Is there something at Mango and Jump?', 0);
+  setTimeout(() => doSpeak('Is there something at Cardiology and Anemia?', 1), 2500);
+}
+
+// Pre-load voices (browsers sometimes need this)
+if (window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.addEventListener('voiceschanged', () => window.speechSynthesis.getVoices());
+}
+
+// Hook speech into speakPrompt
+socket.on('speakPromptSpeech', ({wordX, wordY}) => {
+  // Called after speakPrompt — speak the sentence
+  setTimeout(() => speakSentence(wordX, wordY), 300);
+});
+
+// ══════════════════════════════════════════════════
+// 🔉 SOUND EFFECTS (Web Audio API — no files needed)
+// ══════════════════════════════════════════════════
+let audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playTone(freq, type, duration, volume=0.3, delay=0) {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+    gain.gain.setValueAtTime(volume, ctx.currentTime + delay);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
+    osc.start(ctx.currentTime + delay);
+    osc.stop(ctx.currentTime + delay + duration);
+  } catch(e) {}
+}
+
+function playSoundHit() {
+  // Explosion — low thud + crackling
+  playTone(80, 'sawtooth', 0.3, 0.5);
+  playTone(120, 'square', 0.2, 0.3, 0.05);
+  playTone(60, 'sawtooth', 0.4, 0.4, 0.1);
+  playTone(40, 'sine', 0.6, 0.3, 0.15);
+}
+
+function playSoundMiss() {
+  // Splash — descending sine wave
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(600, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.4);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
+  } catch(e) {}
+}
+
+function playSoundSunk() {
+  // Ship sinking — dramatic descending sequence
+  [400, 300, 200, 120, 80].forEach((f, i) => {
+    playTone(f, 'sawtooth', 0.25, 0.35, i * 0.12);
+  });
+  playTone(60, 'sine', 0.6, 0.4, 0.65);
+}
+
+function playSoundVictory() {
+  // Fanfare — ascending triumphant notes
+  const notes = [523, 659, 784, 1047, 784, 1047, 1047];
+  const timing = [0, 0.15, 0.3, 0.45, 0.65, 0.8, 0.95];
+  notes.forEach((f, i) => playTone(f, 'sine', 0.25, 0.4, timing[i]));
+}
+
+function playSoundDefeat() {
+  // Descending sad tones
+  [400, 350, 280, 220, 180].forEach((f, i) => {
+    playTone(f, 'sine', 0.3, 0.3, i * 0.18);
+  });
+}
+
+function playSoundClick() {
+  playTone(800, 'sine', 0.06, 0.15);
+}
+
+function playSoundTick() {
+  playTone(1200, 'square', 0.04, 0.08);
+}
+
+function playSoundUrgent() {
+  // Urgent beep for last 8 seconds of timer
+  playTone(880, 'square', 0.08, 0.2);
+  playTone(660, 'square', 0.08, 0.1, 0.1);
+}
+
+function playSoundRadar() {
+  // Radar ping
+  playTone(1000, 'sine', 0.15, 0.2);
+  playTone(800, 'sine', 0.12, 0.15, 0.2);
+  playTone(600, 'sine', 0.08, 0.12, 0.38);
+}
+
+function playSoundTorpedo() {
+  // Whoosh + boom
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(200, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.4);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
+  } catch(e) {}
+  setTimeout(() => playSoundHit(), 450);
+}
+
+// speech toggle handled in main settingsUpdated handler below
+
+// ══════════════════════════════════════════════════
+// 🎵 BACKGROUND MUSIC — Real audio file
+// ══════════════════════════════════════════════════
+let bgmAudio = null;
+let bgmMuted = false;
+let bgmRunning = false;
+
+function initBGM() {
+  if (bgmAudio) return;
+  bgmAudio = new Audio('/bgm.mp3');
+  bgmAudio.loop = true;
+  bgmAudio.volume = 0.35;
+  bgmAudio.preload = 'auto';
+}
+
+function startBGM() {
+  if (bgmMuted || bgmRunning) return;
+  initBGM();
+  bgmAudio.currentTime = 0;
+  bgmAudio.play().catch(() => {}); // catch autoplay block
+  bgmRunning = true;
+}
+
+function stopBGM() {
+  if (!bgmAudio) return;
+  // Fade out
+  const fade = setInterval(() => {
+    if (bgmAudio.volume > 0.03) {
+      bgmAudio.volume = Math.max(0, bgmAudio.volume - 0.03);
+    } else {
+      bgmAudio.pause();
+      bgmAudio.currentTime = 0;
+      bgmAudio.volume = 0.35;
+      bgmRunning = false;
+      clearInterval(fade);
+    }
+  }, 50);
+}
+
+function toggleMute() {
+  bgmMuted = !bgmMuted;
+  const btn = document.getElementById('muteBtn');
+  if (bgmMuted) {
+    if (bgmAudio) bgmAudio.pause();
+    bgmRunning = false;
+    if (btn) btn.textContent = '🔇';
+  } else {
+    if (btn) btn.textContent = '🔊';
+    startBGM();
+  }
+}
+
+// Resume on user interaction (browser autoplay policy)
+document.addEventListener('click', () => {
+  if (bgmRunning && bgmAudio && bgmAudio.paused && !bgmMuted) {
+    bgmAudio.play().catch(() => {});
+  }
+}, { passive: true });
+
+// BGM is triggered from within the main gameStart and gameOver handlers below
+
+// Resume audio context on first user interaction (browser requirement)
+document.addEventListener('click', () => {
+  if (typeof bgmCtx !== 'undefined' && bgmCtx && bgmCtx.state === 'suspended') bgmCtx.resume();
+}, { once: false });
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');document.body.classList.toggle('game-active',id==='gameScreen');}
+function toast(msg,dur=2800){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),dur);}
+
+// Phase indicator — works for both desktop and mobile
+function setPhase(n){
+  for(let i=1;i<=4;i++){
+    const d=document.getElementById('ph'+i);
+    const m=document.getElementById('mph'+i);
+    if(d){d.classList.toggle('active',i===n);d.classList.toggle('done',i<n);}
+    if(m){m.classList.toggle('active',i===n);m.classList.toggle('done',i<n);}
+  }
+}
+
+// Update turn text for both layouts
+function setTurnText(main,sub){
+  const td=document.getElementById('turnTextD'),ts=document.getElementById('turnSubD');
+  const tm=document.getElementById('turnTextM'),tms=document.getElementById('turnSubM');
+  if(td)td.textContent=main; if(ts)ts.textContent=sub;
+  if(tm)tm.textContent=main; if(tms)tms.textContent=sub;
+}
+
+// Update opponent info for both layouts
+function setOppInfo(name,id,status,color){
+  ['D','M'].forEach(s=>{
+    const n=document.getElementById('oppName'+s),i=document.getElementById('oppId'+s),st=document.getElementById('oppStatus'+s),av=document.getElementById('oppAvatar'+s);
+    if(n)n.textContent=name; if(i)i.textContent=id||'';
+    if(st){st.textContent=status;st.style.color=color;}
+    if(av)av.textContent=name.slice(0,2).toUpperCase();
+  });
+}
+
+// Update scores for both layouts
+function setScores(hits,misses,sunk){
+  document.getElementById('sHits').textContent=hits;
+  document.getElementById('sMiss').textContent=misses;
+  document.getElementById('sSunk').textContent=sunk;
+  // Mobile bar
+  const mh=document.getElementById('mHits'),mm=document.getElementById('mMiss'),ms=document.getElementById('mSunk');
+  if(mh)mh.textContent=hits; if(mm)mm.textContent=misses; if(ms)ms.textContent=sunk;
+}
+
+// Grid cell accessors — handle both desktop and mobile grids
+function myCell(r,c){
+  if(IS_MOBILE) return document.querySelector(`#myTblM td[data-r="${r}"][data-c="${c}"]`);
+  return document.querySelector(`#myTblD td[data-r="${r}"][data-c="${c}"]`);
+}
+function atkCell(r,c){
+  if(IS_MOBILE) return document.querySelector(`#atkTblM td[data-r="${r}"][data-c="${c}"]`);
+  return document.querySelector(`#atkTblD td[data-r="${r}"][data-c="${c}"]`);
+}
+
+// Mobile grid toggle
+function showMobileGrid(which){
+  mobileGridView=which;
+  document.getElementById('mobileAtkWrap').style.display=which==='atk'?'block':'none';
+  document.getElementById('mobileMyWrap').style.display=which==='my'?'block':'none';
+  document.getElementById('tabAtk').className='mgt '+(which==='atk'?'active':'inactive');
+  document.getElementById('tabMy').className='mgt '+(which==='my'?'active':'inactive');
+}
+
+// Mobile bottom sheet
+function openSheet(){
+  const content=document.getElementById('sheetContent');
+  const isPlacing=phase==='placing';
+  document.getElementById('sheetTitle').textContent=isPlacing?'🚢 Place Your Ships':'⚙️ Game Options';
+  content.innerHTML=isPlacing?getPlacingHTML():getOptionsHTML();
+  document.getElementById('sheetBackdrop').classList.add('on');
+  document.getElementById('mobileSheet').classList.add('on');
+}
+function closeSheet(){
+  document.getElementById('sheetBackdrop').classList.remove('on');
+  document.getElementById('mobileSheet').classList.remove('on');
+}
+
+function getPlacingHTML(){
+  return `
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button class="db ${shipDir==='H'?'on':''}" onclick="setDir('H',this);document.querySelector('.db:first-child').classList.add('on')">↔ Horizontal</button>
+      <button class="db ${shipDir==='V'?'on':''}" onclick="setDir('V',this)">↕ Vertical</button>
+    </div>
+    <div class="ship-sel" id="shipSelM">
+      ${SHIPS.map(s=>`<div class="sopt ${placed[s.name]?'done':''}${curShip.name===s.name?' on':''}" onclick="pickShip(this,'${s.name}',${s.size})" data-ship="${s.name}">
+        <span class="snm">${s.label}</span>
+        <div class="sblk">${'<div class="sb"></div>'.repeat(s.size)}</div>
+      </div>`).join('')}
+    </div>
+    <button class="btn btn-blue" style="margin-top:10px;width:100%" onclick="autoPlace();closeSheet()">🎲 Auto-Place All</button>
+    <button class="btn btn-gold" style="margin-top:6px;width:100%" id="readyBtnM" onclick="submitShips()" ${Object.keys(placed).length>=5?'':'disabled'}>✅ Ready! Start Game</button>
+    <button style="width:100%;margin-top:5px;background:transparent;border:none;color:var(--miss);font-size:11px;font-weight:700;cursor:pointer;padding:4px" onclick="clearShips();closeSheet()">✕ Reset Ships</button>
+  `;
+}
+
+function getOptionsHTML(){
+  return `
+    <div class="card" style="margin-bottom:10px">
+      <div class="ctitle">⚡ Power-Ups</div>
+      <div style="font-size:10px;color:var(--foam);margin-bottom:7px">📡 Sink ship → Radar · 🚀 Sink 3 → Torpedo</div>
+      <div class="powerup-grid">
+        <div class="pu ${(settings.powerupsEnabled===false)?'used':''}" id="pu-radar-m" onclick="activatePowerup('radar');closeSheet()"><div class="pu-icon">📡</div><div class="pu-name">Radar</div><div class="pu-count" id="puc-radar-m">×0</div></div>
+        <div class="pu ${(settings.powerupsEnabled===false)?'used':''}" id="pu-torpedo-m" onclick="activatePowerup('torpedo');closeSheet()"><div class="pu-icon">🚀</div><div class="pu-name">Torpedo</div><div class="pu-count" id="puc-torpedo-m">×0</div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:10px">
+      <div class="ctitle">📋 How to Play</div>
+      <div class="how-to-play">
+        <div class="how-step"><span class="hs-num">1.</span><span>Tap <b style="color:#fff">Enemy Waters</b> tab, tap a square.</span></div>
+        <div class="how-step"><span class="hs-num">2.</span><span>Say the sentence shown to your partner.</span></div>
+        <div class="how-step"><span class="hs-num">3.</span><span>Partner taps <b style="color:var(--hit)">Hit</b> or <b style="color:#aaa">Miss</b>.</span></div>
+        <div class="how-step"><span class="hs-num">4.</span><span>Sink all 5 ships to win! 🏆</span></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-red" style="font-size:11px;padding:8px" onclick="studentReset()">🔄 Reset</button>
+      <button style="flex:1;padding:8px;border:none;border-radius:10px;background:rgba(142,68,173,.7);color:#fff;font-family:Nunito,sans-serif;font-weight:800;font-size:11px;cursor:pointer;text-transform:uppercase" onclick="studentEndGame()">🏁 End Game</button>
+    </div>
+  `;
+}
+
+// ── Login ─────────────────────────────────────────────────────────────────
+function setGameMode(mode){
+  gameMode=mode;
+  document.getElementById('modeMulti').classList.toggle('on',mode==='multiplayer');
+  document.getElementById('modeSolo').classList.toggle('on',mode==='solo');
+  const classroomStudent=launchProfile?.role==='student'&&launchProfile?.classroomId;
+  document.getElementById('multiTitle').textContent=classroomStudent?'⚔ Play a classmate':'⚔ Play someone online';
+  document.getElementById('multiDescription').textContent=classroomStudent?'Only learners in your class can enter this match.':'Join a private match with another individual learner.';
+  document.getElementById('modeNote').textContent=mode==='solo'?'Start immediately. Captain Lexi manages the opposing fleet.':classroomStudent?'You will only be matched with someone currently online in your class.':'You will be matched with another individual learner who is online.';
+  document.getElementById('loginButton').textContent=mode==='solo'?'⚓ Start solo practice':'⚓ Find my opponent';
+}
+function doLogin(){
+  const name=document.getElementById('loginName').value.trim();
+  const id=document.getElementById('loginId').value.trim();
+  const cls=document.getElementById('loginClass').value.trim();
+  if(!name||!id){document.getElementById('loginError').textContent='Please fill in all fields.';document.getElementById('loginError').style.display='block';return;}
+  sessionStorage.setItem('vb_n',name);sessionStorage.setItem('vb_i',id);sessionStorage.setItem('vb_c',cls);sessionStorage.setItem('vb_mode',gameMode);
+  me={id,name,className:cls};
+  socket.emit('studentLogin',{studentId:id,name,className:cls,mode:gameMode,integrationToken:launchToken});
+}
+window.addEventListener('load',()=>{
+  setGameMode(gameMode);
+  if(launchProfile){document.getElementById('loginName').value=launchProfile.name||'';document.getElementById('loginId').value=launchProfile.userId||'';document.getElementById('loginClass').value=launchProfile.className||'';}
+  const n=sessionStorage.getItem('vb_n'),i=sessionStorage.getItem('vb_i'),c=sessionStorage.getItem('vb_c');
+  if(n&&i){document.getElementById('loginName').value=n;document.getElementById('loginId').value=i;if(c)document.getElementById('loginClass').value=c;me={id:i,name:n,className:c||''};show('waitScreen');document.getElementById('waitName').textContent=`Reconnecting as ${n}…`;socket.emit('studentLogin',{studentId:i,name:n,className:c||'',mode:gameMode,integrationToken:launchToken});}
+});
+socket.on('loginSuccess',({studentId,name})=>{me.id=studentId;me.name=name;});
+socket.on('loginError',({message})=>{show('loginScreen');const el=document.getElementById('loginError');el.textContent=message;el.style.display='block';});
+socket.on('waitingForPair',()=>{show('waitScreen');document.getElementById('waitName').textContent=me.name?`Logged in as ${me.name} — waiting for opponent…`:'';});
+
+// ── Partner screen ────────────────────────────────────────────────────────
+socket.on('paired',({roomId:rid,opponents})=>{
+  roomId=rid;
+  if(opponents[0])opponentName=opponents[0].name;
+  const container=document.getElementById('partnerCards');
+  container.innerHTML=opponents.map(o=>`<div class="partner-card"><div class="partner-avatar">${o.name.slice(0,2).toUpperCase()}</div><div class="partner-name">${o.name}</div><div class="partner-id">Student ID: ${o.id}</div><div class="partner-class">Class: ${o.className||'—'}</div></div>`).join('<div style="font-family:Bangers,cursive;font-size:20px;color:var(--gold);letter-spacing:3px;margin:8px 0;opacity:.6">VS</div>');
+  document.getElementById('myNameDisplay').textContent=me.name;
+  document.getElementById('myIdDisplay').textContent=me.id;
+  document.getElementById('beginBtn').disabled=false;
+  document.getElementById('beginBtn').textContent='⚓ BEGIN BATTLE!';
+  document.getElementById('waitPartnerMsg').style.display='none';
+  show('partnerScreen');
+});
+function clickBegin(){
+  document.getElementById('beginBtn').disabled=true;
+  document.getElementById('beginBtn').textContent='⏳ Waiting for partner…';
+  document.getElementById('waitPartnerMsg').style.display='block';
+  socket.emit('playerReady',{roomId,studentId:me.id});
+}
+socket.on('waitingForPartnerReady',()=>{document.getElementById('waitPartnerMsg').style.display='block';});
+socket.on('settingsUpdated',(s)=>{
+  settings=s;
+  vocabX=s.vocabX;vocabY=s.vocabY;defsX=s.defsX||[];defsY=s.defsY||[];showDefs=s.showDefs!==false;
+  if(gridsBuilt)rebuildHeaders();
+  applyTimerSettings();
+  // Voice cache cleared so next speakSentence picks up new preferredVoice
+  voiceCache=null;
+});
+
+// ── Room state ────────────────────────────────────────────────────────────
+socket.on('roomState',state=>{
+  roomId=state.roomId;phase=state.phase;vocabX=state.vocabX;vocabY=state.vocabY;defsX=state.defsX||[];defsY=state.defsY||[];showDefs=state.showDefs!==false;settings=state.settings;
+  const opp=state.players.find(p=>!p.isYou);
+  if(opp){opponentName=opp.name;setOppInfo(opp.name,`ID: ${opp.id}`,'● Online','var(--green)');}
+  const me2=state.players.find(p=>p.isYou);
+  if(me2){setScores(me2.score.hits,me2.score.misses,me2.score.sunk);if(me2.powerups)updatePowerups(me2.powerups);}
+
+  if(phase==='paired'){
+    if(!document.getElementById('partnerScreen').classList.contains('active')){
+      if(opp){document.getElementById('partnerCards').innerHTML=`<div class="partner-card"><div class="partner-avatar">${opp.name.slice(0,2).toUpperCase()}</div><div class="partner-name">${opp.name}</div><div class="partner-id">Student ID: ${opp.id}</div></div>`;document.getElementById('myNameDisplay').textContent=me.name;document.getElementById('myIdDisplay').textContent=me.id;document.getElementById('beginBtn').disabled=false;document.getElementById('beginBtn').textContent='⚓ BEGIN BATTLE!';document.getElementById('waitPartnerMsg').style.display='none';}
+      show('partnerScreen');
+    }
+    return;
+  }
+
+  if(phase==='placing'||phase==='playing'){
+    show('gameScreen');
+    buildShipsBar();buildGrids();gridsBuilt=true;
+    applyTimerSettings();
+    if(state.myGrid){
+      myGridData=state.myGrid.map(r=>[...r]);
+      for(let r=0;r<GS;r++)for(let c=0;c<GS;c++){
+        if(myGridData[r][c]!==1)continue;
+        const e=myCell(r,c);if(!e)continue;
+        const oppAtk=state.opponentAttackGrid;
+        if(oppAtk&&oppAtk[r][c]===2){e.classList.add('hit');e.textContent='💥';}
+        else if(oppAtk&&oppAtk[r][c]===1){e.classList.add('miss');e.textContent='·';}
+        else{e.classList.add('ship-here');e.textContent='🔲';}
+      }
+    }
+    if(state.attackGrid){atkGridData=state.attackGrid.map(r=>[...r]);syncAttackGrid(state.attackGrid);}
+  }
+
+  if(phase==='placing'){
+    // Show placing card on desktop
+    const pd=document.getElementById('placingCardD');if(pd)pd.style.display='block';
+    const ppd=document.getElementById('powerupCardD');if(ppd)ppd.style.display='none';
+    setTurnText('🚢 Place your ships!','Tap ⚙️ to place ships on Your Fleet');
+    setPhase(1);
+    // On mobile show hint to open sheet
+    if(IS_MOBILE) toast('Tap ⚙️ at the bottom to place your ships!',4000);
+  }
+
+  if(phase==='playing'){
+    const pd=document.getElementById('placingCardD');if(pd)pd.style.display='none';
+    const ppd=document.getElementById('powerupCardD');if(ppd)ppd.style.display='block';
+    isMyTurn=state.currentAttackerId===me.id;
+    if(isMyTurn){setTurnText('🎯 Your turn — tap Enemy Waters','Select a square, then say the sentence!');setPhase(1);if(settings.timerEnabled)startTimer();}
+    else{setTurnText(`⏳ ${opponentName}'s turn`,'Listen for their sentence!');setPhase(0);stopTimer();}
+    if(state.pendingAttack&&state.pendingAttack.defenderId===me.id){
+      const pa=state.pendingAttack;
+      openDefendBar(state.players.find(p=>p.id===pa.attackerId)?.name||'Opponent',vocabX[pa.col]||'?',vocabY[pa.row]||'?',pa.col,pa.row);
+    }
+  }
+});
+
+function syncAttackGrid(grid){
+  for(let r=0;r<GS;r++)for(let c=0;c<GS;c++){
+    const el=atkCell(r,c);if(!el)continue;
+    el.classList.remove('hit','miss','pending');el.textContent='';
+    if(grid[r][c]===2){el.classList.add('hit');el.textContent='💥';}
+    else if(grid[r][c]===1){el.classList.add('miss');el.textContent='·';}
+  }
+}
+
+// ── Game events ───────────────────────────────────────────────────────────
+socket.on('gameStart',({firstAttackerId})=>{
+  phase='playing';isMyTurn=firstAttackerId===me.id;
+  const pd=document.getElementById('placingCardD');if(pd)pd.style.display='none';
+  const ppd=document.getElementById('powerupCardD');if(ppd)ppd.style.display='block';
+  closeSheet();
+  toast('⚓ Battle begins! '+(isMyTurn?'Your turn first!':'Opponent goes first!'));
+  if(IS_MOBILE&&isMyTurn) toast('🎯 Tap Enemy Waters tab then select a square!',3000);
+  // 🎵 Start BGM
+  if(!bgmMuted) setTimeout(startBGM, 500);
+});
+
+socket.on('clearPrompts',()=>{closeModal();closeDefendBar();});
+
+socket.on('attackResult',({attackerId,defenderId,row,col,result,nextAttackerId})=>{
+  closeModal();closeDefendBar();
+  const ea=atkCell(row,col);
+  if(ea){ea.classList.remove('pending');ea.classList.add(result?'hit':'miss');ea.textContent=result?'💥':'·';}
+  if(defenderId===me.id){const em=myCell(row,col);if(em){em.classList.remove('ship-here','selected');em.classList.add(result?'hit':'miss');em.textContent=result?'💥':'·';}}
+  flashResult(result);
+  isMyTurn=nextAttackerId===me.id;
+  if(isMyTurn){setTurnText('🎯 Your turn — tap Enemy Waters','Select a square, then say the sentence!');setPhase(1);if(settings.timerEnabled)startTimer();}
+  else{setTurnText(`⏳ ${opponentName}'s turn`,'Listen for their sentence!');setPhase(0);stopTimer();}
+  // On mobile, switch to attack grid when it's your turn
+  if(IS_MOBILE&&isMyTurn)showMobileGrid('atk');
+  else if(IS_MOBILE&&defenderId===me.id)showMobileGrid('my');
+});
+
+socket.on('shipSunk',({attackerId,shipName})=>{
+  if(attackerId===me.id){toast(`💥 You sunk the ${shipName}!`,3000);const s=document.getElementById('sSunk');s.textContent=parseInt(s.textContent)+1;const ms=document.getElementById('mSunk');if(ms)ms.textContent=parseInt(ms.textContent)+1;}
+  else toast(`💀 Your ${shipName} was sunk!`,3000);
+  if(attackerId!==me.id){const el=document.getElementById('spb-'+shipName);if(el)el.classList.add('sunk');}
+  // 🔊 Sinking sound
+  playSoundSunk();
+});
+
+socket.on('powerupEarned',({reason})=>toast('⭐ '+reason,4000));
+
+socket.on('turnSkipped',({skippedName,nextAttackerId})=>{
+  closeModal();closeDefendBar();
+  toast(`⏰ ${skippedName}'s turn was skipped!`,3000);
+  isMyTurn=nextAttackerId===me.id;
+  if(isMyTurn){setTurnText('🎯 Your turn — tap Enemy Waters','Select a square, then say the sentence!');setPhase(1);if(settings.timerEnabled)startTimer();}
+  else{setTurnText(`⏳ ${opponentName}'s turn`,'Listen for their sentence!');setPhase(0);stopTimer();}
+  if(IS_MOBILE&&isMyTurn)showMobileGrid('atk');
+});
+
+socket.on('gameOver',({winnerId,winnerName})=>{
+  stopTimer();closeModal();closeDefendBar();
+  // 🎵 Fade out BGM
+  setTimeout(stopBGM, 1000);
+  const won=winnerId===me.id;
+  // 🔊 Victory or defeat sound
+  setTimeout(()=>{ if(won) playSoundVictory(); else playSoundDefeat(); }, 500);
+  document.getElementById('goEmoji').textContent=won?'🏆':'💀';
+  document.getElementById('goTitle').textContent=won?'Victory!':'Defeated!';
+  document.getElementById('goSub').textContent=won?`You sank all of ${opponentName}'s ships!`:`${winnerName} sank all your ships!`;
+  document.getElementById('goHits').textContent=document.getElementById('sHits').textContent;
+  document.getElementById('goMiss').textContent=document.getElementById('sMiss').textContent;
+  document.getElementById('goSunk').textContent=document.getElementById('sSunk').textContent;
+  sessionStorage.clear();show('gameoverScreen');
+});
+
+// ── Speak prompts ─────────────────────────────────────────────────────────
+socket.on('speakPrompt',({wordX,wordY,attackerIdx})=>{
+  amDefender=false;
+  currentSpeakerIdx = attackerIdx || 0;
+  document.getElementById('mAvatar').textContent=me.name.slice(0,2).toUpperCase();
+  document.getElementById('mName').textContent=me.name;
+  document.getElementById('mWordX').textContent=wordX;
+  document.getElementById('mWordY').textContent=wordY;
+  document.getElementById('sayBox').style.display=settings.hardMode?'none':'block';
+  document.getElementById('backdrop').classList.add('on');
+  document.getElementById('speakModal').classList.add('on');
+  stopTimer();setPhase(2);
+  if(IS_MOBILE){const cb=document.getElementById('coordBanner');if(cb){cb.innerHTML=`Selected: <span class="cw">${wordX}</span> × <span class="cw">${wordY}</span>`;cb.classList.add('on');}}
+  // Attacker sees the sentence prompt but does NOT hear it — they say it out loud themselves
+});
+
+socket.on('defendPrompt',({attackerName,wordX,wordY,row,col,attackerIdx})=>{
+  amDefender=true;
+  currentSpeakerIdx = attackerIdx || 0;
+  // Store for repeat button
+  currentSentence = `Is there something at ${wordX} and ${wordY}?`;
+  openDefendBar(attackerName,wordX,wordY);
+  setPhase(3);
+  if(IS_MOBILE)showMobileGrid('my');
+  // 🔊 Defender hears the sentence (they can't see the words)
+  setTimeout(()=>speakSentence(wordX,wordY,attackerIdx||0), 400);
+});
+
+function openDefendBar(atkName,wordX,wordY,colIdx,rowIdx){
+  amDefender=true;
+  document.getElementById('dbAtkName').textContent=atkName;
+  const defBox=document.getElementById('defBarDefs');
+  if(showDefs){
+    const dX=colIdx!==undefined&&defsX[colIdx]?defsX[colIdx]:'';
+    const dY=rowIdx!==undefined&&defsY[rowIdx]?defsY[rowIdx]:'';
+    if(dX||dY){
+      defBox.innerHTML=
+        (dX?`<span style="color:var(--gold);font-weight:800">${wordX}</span> — ${dX}<br>`:'') +
+        (dY?`<span style="color:var(--gold);font-weight:800">${wordY}</span> — ${dY}`:'');
+      defBox.style.display='block';
+    } else {
+      defBox.style.display='none';
+    }
+  } else {
+    defBox.style.display='none';
+  }
+  document.getElementById('defendBar').classList.add('on');
+  document.getElementById('gameScreen').style.paddingBottom=IS_MOBILE?'240px':'220px';
+}
+function closeDefendBar(){document.getElementById('defendBar').classList.remove('on');document.getElementById('gameScreen').style.paddingBottom=IS_MOBILE?'80px':'140px';}
+function sendDefend(isHit){
+  const bar=document.getElementById('defendBar');if(!bar.classList.contains('on'))return;
+  if(!roomId)return;
+  socket.emit('defendAnswer',{roomId,studentId:me.id,isHit});closeDefendBar();amDefender=false;setPhase(4);
+}
+function closeModal(){document.getElementById('backdrop').classList.remove('on');document.getElementById('speakModal').classList.remove('on');}
+
+// ── Attack ────────────────────────────────────────────────────────────────
+function clickAtk(r,c){
+  if(!isMyTurn||phase!=='playing')return;
+  playSoundClick();
+  if(activePowerup){firePowerupAt(r,c);return;}
+  const el=atkCell(r,c);
+  if(!el||el.classList.contains('hit')||el.classList.contains('miss')||el.classList.contains('pending'))return;
+  document.querySelectorAll('#atkTblD td.pending, #atkTblM td.pending').forEach(e=>e.classList.remove('pending'));
+  el.classList.add('pending');setPhase(2);
+  socket.emit('selectSquare',{roomId,studentId:me.id,row:r,col:c});
+  // Show coordinate in mobile banner
+  if(IS_MOBILE){const cb=document.getElementById('coordBanner');if(cb){cb.innerHTML=`Asking about: <span class="cw">${vocabX[c]||'?'}</span> × <span class="cw">${vocabY[r]||'?'}</span>`;cb.classList.add('on');}}
+}
+
+// ── Grid builders ─────────────────────────────────────────────────────────
+function buildGrids(){
+  if(IS_MOBILE){buildGrid('atkTblM',true,true);buildGrid('myTblM',false,true);}
+  else{buildGrid('atkTblD',true,false);buildGrid('myTblD',false,false);}
+}
+
+function showTermPopup(term){
+  let pop=document.getElementById('termPopup');
+  if(!pop){
+    pop=document.createElement('div');pop.id='termPopup';
+    pop.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--ocean-deep);border:2px solid var(--wave);border-radius:14px;padding:16px 24px;font-family:Nunito,sans-serif;font-weight:800;font-size:17px;color:#e8f4f8;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.6);text-align:center;max-width:80vw';
+    pop.onclick=()=>pop.remove();
+    document.body.appendChild(pop);
+  }
+  pop.textContent=term;
+  clearTimeout(pop._t);
+  pop._t=setTimeout(()=>pop.remove(),2500);
+}
+
+function buildGrid(tid,isAtk,isMobile){
+  const t=document.getElementById(tid);if(!t)return;t.innerHTML='';
+  const hr=document.createElement('tr');
+  const ec=document.createElement('th');ec.className='rh';ec.textContent='';hr.appendChild(ec);
+  for(let c=0;c<GS;c++){
+    const th=document.createElement('th');
+    const word=vocabX[c]||String.fromCharCode(65+c);
+    th.textContent=isMobile?String.fromCharCode(65+c):(word.length>12?word.slice(0,11)+'…':word);
+    th.title=word;
+    if(isMobile) th.onclick=(e)=>{e.stopPropagation();showTermPopup(word);}
+    hr.appendChild(th);
+  }
+  t.appendChild(hr);
+  for(let r=0;r<GS;r++){
+    const tr=document.createElement('tr');
+    const rh=document.createElement('th');rh.className='rh';
+    const rowWord=vocabY[r]||(r+1)+'';
+    rh.textContent=isMobile?String(r+1):(rowWord.length>12?rowWord.slice(0,11)+'…':rowWord);
+    rh.title=rowWord;
+    if(isMobile) rh.onclick=(e)=>{e.stopPropagation();showTermPopup(rowWord);}
+    tr.appendChild(rh);
+    for(let c=0;c<GS;c++){
+      const td=document.createElement('td');td.className='cell'+(isAtk?' atk':'');
+      td.dataset.r=r;td.dataset.c=c;
+      if(isAtk){
+        td.onclick=(e)=>{
+          if(isMobile&&(e.target===td||!isMyTurn)){showTermPopup(`${vocabX[c]||'?'} × ${vocabY[r]||'?'}`);}
+          if(isMyTurn) clickAtk(r,c);
+        };
+      } else {
+        td.onclick=()=>placeAt(r,c);
+        td.onmouseenter=()=>prevShip(r,c);
+        td.onmouseleave=clearPrev;
+      }
+      tr.appendChild(td);
+    }
+    t.appendChild(tr);
+  }
+}
+
+function rebuildHeaders(){
+  ['atkTblD','myTblD','atkTblM','myTblM'].forEach(tid=>{
+    const t=document.getElementById(tid);if(!t)return;
+    const isMobile=tid.endsWith('M');
+    t.querySelectorAll('th:not(.rh)').forEach((th,i)=>{
+      const w=vocabX[i];if(!w)return;
+      th.textContent=isMobile?String.fromCharCode(65+i):(w.length>12?w.slice(0,11)+'…':w);th.title=w;
+    });
+    t.querySelectorAll('th.rh').forEach((th,i)=>{
+      if(i===0)return;const w=vocabY[i-1];if(!w)return;
+      th.textContent=isMobile?String(i):(w.length>12?w.slice(0,11)+'…':w);th.title=w;
+    });
+  });
+}
+
+// ── Ship placement ────────────────────────────────────────────────────────
+function shipCells(r,c,sz,d){const a=[];for(let i=0;i<sz;i++)a.push(d==='H'?[r,c+i]:[r+i,c]);return a;}
+function prevShip(r,c){clearPrev();shipCells(r,c,curShip.size,shipDir).forEach(([rr,cc])=>{const e=myCell(rr,cc);if(e&&!e.classList.contains('ship-here'))e.classList.add('selected');});}
+function clearPrev(){document.querySelectorAll('#myTblD .selected, #myTblM .selected').forEach(e=>e.classList.remove('selected'));}
+
+function placeAt(r,c){
+  if(placed[curShip.name])return;
+  const cs=shipCells(r,c,curShip.size,shipDir);
+  if(cs.some(([rr,cc])=>rr<0||rr>=GS||cc<0||cc>=GS||myGridData[rr][cc]))return;
+  cs.forEach(([rr,cc])=>{myGridData[rr][cc]=1;const e=myCell(rr,cc);if(e){e.classList.add('ship-here');e.textContent='🔲';}});
+  placed[curShip.name]=true;placedCells[curShip.name]=cs;
+  document.querySelectorAll(`[data-ship="${curShip.name}"]`).forEach(el=>el.classList.add('done'));
+  toast(`${curShip.name.charAt(0).toUpperCase()+curShip.name.slice(1)} placed!`);
+  // Refresh mobile sheet if open
+  if(IS_MOBILE&&document.getElementById('mobileSheet').classList.contains('on')){
+    document.getElementById('sheetContent').innerHTML=getPlacingHTML();
+    const rb=document.getElementById('readyBtnM');if(rb)rb.disabled=Object.keys(placed).length<5;
+  }
+}
+
+function pickShip(el,name,size){document.querySelectorAll('.sopt').forEach(o=>o.classList.remove('on'));el.classList.add('on');curShip={name,size};}
+function setDir(d,el){shipDir=d;document.querySelectorAll('.db').forEach(b=>b.classList.remove('on'));el.classList.add('on');}
+
+function autoPlace(){
+  clearShips();
+  SHIPS.forEach(ship=>{let ok=false;while(!ok){const d=Math.random()<.5?'H':'V',r=Math.floor(Math.random()*GS),c=Math.floor(Math.random()*GS);const cs=shipCells(r,c,ship.size,d);if(!cs.some(([rr,cc])=>rr<0||rr>=GS||cc<0||cc>=GS||myGridData[rr][cc])){cs.forEach(([rr,cc])=>{myGridData[rr][cc]=1;const e=myCell(rr,cc);if(e){e.classList.add('ship-here');e.textContent='🔲';}});placed[ship.name]=true;placedCells[ship.name]=cs;document.querySelectorAll(`[data-ship="${ship.name}"]`).forEach(el=>el.classList.add('done'));ok=true;}}});
+  toast('All ships placed!');
+}
+
+function clearShips(){
+  myGridData=Array.from({length:GS},()=>Array(GS).fill(0));placed={};placedCells={};
+  document.querySelectorAll('#myTblD td, #myTblM td').forEach(e=>{e.classList.remove('ship-here','hit','miss','selected');e.textContent='';});
+  document.querySelectorAll('.sopt').forEach(e=>e.classList.remove('done'));
+}
+
+function submitShips(){
+  if(Object.keys(placed).length<5){toast('Place all 5 ships first!');return;}
+  const shipData={};SHIPS.forEach(s=>{shipData[s.name]=placedCells[s.name]||[];});
+  socket.emit('placeShips',{roomId,studentId:me.id,grid:myGridData,shipData});
+  ['readyBtnD','readyBtnM'].forEach(id=>{const b=document.getElementById(id);if(b){b.textContent='⏳ Waiting for opponent…';b.disabled=true;}});
+  toast('Ships submitted!');
+  if(IS_MOBILE)closeSheet();
+}
+
+// ── Ships bar ─────────────────────────────────────────────────────────────
+function buildShipsBar(){document.getElementById('shipsBar').innerHTML=SHIPS.map(s=>`<div class="sp" id="spb-${s.name}"><div class="sp-blks">${'<div class="spb"></div>'.repeat(s.size)}</div>${s.label.replace(/^[^ ]+ /,'')}</div>`).join('');}
+
+// ── Power-ups ─────────────────────────────────────────────────────────────
+function updatePowerups(pu){
+  ['radar','torpedo'].forEach(t=>{
+    ['','- m'].forEach(sfx=>{
+      const id='puc-'+t+(sfx?sfx.trim():'');
+      const el=document.getElementById('pu-'+t+(sfx?'-m':''));
+      const ce=document.getElementById(id.replace('- m','-m'));
+      if(!el||!ce)return;
+      const n=pu[t]||0;ce.textContent='×'+n;el.classList.toggle('used',n<=0);
+    });
+    // Both desktop and mobile
+    const de=document.getElementById('pu-'+t),dce=document.getElementById('puc-'+t);
+    const me2=document.getElementById('pu-'+t+'-m'),mce=document.getElementById('puc-'+t+'-m');
+    const n=pu[t]||0;
+    if(de&&dce){dce.textContent='×'+n;de.classList.toggle('used',n<=0);}
+    if(me2&&mce){mce.textContent='×'+n;me2.classList.toggle('used',n<=0);}
+  });
+}
+
+function activatePowerup(type){
+  if(!isMyTurn){toast('⚠️ Only use power-ups on your turn!');return;}
+  const el=document.getElementById('pu-'+type);if(el&&el.classList.contains('used'))return;
+  activePowerup=type;
+  toast(type==='radar'?'📡 Tap a square to scan that 3×3 area':'🚀 Tap any square to torpedo that entire row!',4000);
+  document.querySelectorAll('#atkTblD td.cell:not(.hit):not(.miss), #atkTblM td.cell:not(.hit):not(.miss)').forEach(e=>e.style.outline='2px solid rgba(243,156,18,.6)');
+  if(IS_MOBILE)showMobileGrid('atk');
+}
+
+function firePowerupAt(r,c){
+  document.querySelectorAll('#atkTblD td.cell, #atkTblM td.cell').forEach(e=>e.style.outline='');
+  socket.emit('usePowerup',{roomId,studentId:me.id,type:activePowerup,row:r,col:c});
+  activePowerup=null;
+}
+
+socket.on('radarResult',({centerRow,centerCol,shipCells,found})=>{
+  playSoundRadar();
+  for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const el=atkCell(centerRow+dr,centerCol+dc);if(el&&!el.classList.contains('hit')&&!el.classList.contains('miss'))el.style.background='rgba(142,68,173,.4)';}
+  shipCells.forEach(([r,c])=>{const el=atkCell(r,c);if(el){el.style.background='rgba(243,156,18,.55)';el.textContent='❓';}});
+  toast(found?`📡 ${shipCells.length} ship segment(s) detected!`:'📡 No ships in that area.',4000);
+  setTimeout(()=>{for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const el=atkCell(centerRow+dr,centerCol+dc);if(el&&!el.classList.contains('hit')&&!el.classList.contains('miss')){el.style.background='';el.textContent='';}}},5000);
+});
+
+socket.on('torpedoResult',({row,results})=>{
+  playSoundTorpedo();
+  results.forEach(({row:r,col:c,hit})=>{const el=atkCell(r,c);if(el){el.classList.remove('pending');el.classList.add(hit?'hit':'miss');el.textContent=hit?'💥':'·';}});
+  toast(`🚀 Torpedo! ${results.filter(x=>x.hit).length} hit(s)!`,3500);flashResult(results.some(x=>x.hit));
+});
+
+// ── Timer ─────────────────────────────────────────────────────────────────
+function applyTimerSettings(){
+  const ring=document.getElementById('timerEl');if(!ring)return;
+  if(settings.timerEnabled){ring.style.display='flex';ring.textContent=settings.timerSeconds||60;}
+  else{ring.style.display='none';stopTimer();}
+}
+function startTimer(){
+  if(!settings.timerEnabled)return;
+  const secs=settings.timerSeconds||60;timerVal=secs;
+  const el=document.getElementById('timerEl');el.textContent=secs;el.classList.remove('urg');
+  clearInterval(timerIv);
+  timerIv=setInterval(()=>{
+    timerVal--;el.textContent=timerVal;
+    if(timerVal<=8){el.classList.add('urg');playSoundUrgent();}
+    else{playSoundTick();}
+    if(timerVal<=0){clearInterval(timerIv);el.textContent='⏰';toast("⏰ Time's up! Turn skipped.",3000);closeModal();closeDefendBar();if(roomId&&me.id)socket.emit('skipTurn',{roomId,studentId:me.id});}
+  },1000);
+}
+function stopTimer(){clearInterval(timerIv);const el=document.getElementById('timerEl');el.textContent=settings.timerSeconds||'—';el.classList.remove('urg');}
+function flashResult(hit){
+  const el=document.getElementById('flash');el.textContent=hit?'💥 HIT!':'🌊 MISS!';el.style.color=hit?'#e74c3c':'#85c1e9';el.classList.add('on');setTimeout(()=>el.classList.remove('on'),700);
+  if(hit) playSoundHit(); else playSoundMiss();
+}
+
+// ── Reset / End ───────────────────────────────────────────────────────────
+function studentReset(){if(!confirm('Reset this game? Both players will return to login.'))return;socket.emit('studentReset',{roomId,studentId:me.id});}
+function studentEndGame(){if(!confirm('End this game? Both players will return to login.'))return;socket.emit('endGame',{roomId,studentId:me.id});}
+socket.on('gameReset',({reason})=>{stopTimer();closeModal();closeDefendBar();sessionStorage.clear();alert('🔄 '+reason+'. The page will reload.');location.reload();});
+socket.on('gameEnded',({reason})=>{stopTimer();closeModal();closeDefendBar();sessionStorage.clear();alert('🏁 '+reason+'. The page will reload.');location.reload();});
+
+socket.on('vocabRefresh',({vocabX:newX, vocabY:newY, defsX:newDX, defsY:newDY})=>{
+  vocabX = newX; vocabY = newY; defsX = newDX||[]; defsY = newDY||[];
+  // Redraw both grids so new labels appear immediately
+  renderMyGrid(); renderAtkGrid();
+  // Flash notification
+  const note = document.createElement('div');
+  note.textContent = '🔄 New vocabulary set!';
+  note.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);background:var(--hit);color:#fff;font-family:Nunito,sans-serif;font-weight:800;font-size:15px;padding:10px 22px;border-radius:24px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.4);pointer-events:none;transition:opacity .5s';
+  document.body.appendChild(note);
+  setTimeout(()=>{ note.style.opacity='0'; setTimeout(()=>note.remove(), 500); }, 3000);
+});
+
+// ── System events ─────────────────────────────────────────────────────────
+socket.on('gamePaused',()=>document.getElementById('paused').classList.add('on'));
+socket.on('gameResumed',()=>document.getElementById('paused').classList.remove('on'));
+socket.on('announcement',msg=>{const a=document.getElementById('announce');a.textContent='📢 '+msg;a.classList.add('on');setTimeout(()=>a.classList.remove('on'),6000);});
+socket.on('opponentDisconnected',({name})=>toast(`⚠️ ${name} disconnected — they can rejoin`,5000));
+// Repeat sentence triggered by partner
+socket.on('repeatSentenceAudio',({wordX,wordY,attackerIdx})=>{
+  doSpeak(`Is there something at ${wordX} and ${wordY}?`, attackerIdx||0);
+});
+socket.on('playerMoved',({name})=>toast(`ℹ️ ${name} was moved to another game`,5000));
+
+
+</script>
+</body>
+</html>

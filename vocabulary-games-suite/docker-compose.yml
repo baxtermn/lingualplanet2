@@ -1,0 +1,26 @@
+services:
+  launcher:
+    build: .
+    command: ["node", "launcher.mjs"]
+    ports: ["4100:4100"]
+    environment: ["HOST=0.0.0.0"]
+  word-defusal:
+    build: .
+    command: ["node", "game-1-ktane/server.mjs"]
+    ports: ["4101:4101"]
+    environment: ["HOST=0.0.0.0"]
+  word-kitchen:
+    build: .
+    command: ["node", "game-2-overcooked/server.mjs"]
+    ports: ["4102:4102"]
+    environment: ["HOST=0.0.0.0"]
+  semantic-drop:
+    build: .
+    command: ["node", "game-3-falling-blocks/server.mjs"]
+    ports: ["4103:4103"]
+    environment: ["HOST=0.0.0.0"]
+  visual-studio:
+    build: .
+    command: ["node", "game-4-skribbl/server.mjs"]
+    ports: ["4104:4104"]
+    environment: ["HOST=0.0.0.0"]
