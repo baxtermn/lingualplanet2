@@ -309,8 +309,8 @@ td.cell.miss{background:rgba(127,140,141,.2)!important;border-color:rgba(127,140
       <button class="mode-option" id="modeSolo" type="button" onclick="setGameMode('solo')"><strong>🤖 Play solo</strong><span>Practise immediately against Captain Lexi.</span></button>
     </div>
     <div class="field-group"><label>Your Name</label><input id="loginName" type="text" placeholder="e.g. Yamada Yuki" autocomplete="off"></div>
-    <div class="field-group"><label>Student ID</label><input id="loginId" type="text" placeholder="e.g. S-1042" autocomplete="off"></div>
-    <div class="field-group"><label>Class</label><input id="loginClass" type="text" placeholder="e.g. 2B" autocomplete="off"></div>
+    <div class="field-group" id="idField"><label>Student ID <span style="opacity:.55;font-weight:600;text-transform:none;letter-spacing:0">(optional)</span></label><input id="loginId" type="text" placeholder="e.g. S-1042" autocomplete="off"></div>
+    <div class="field-group" id="classField"><label>Class <span style="opacity:.55;font-weight:600;text-transform:none;letter-spacing:0">(optional)</span></label><input id="loginClass" type="text" placeholder="e.g. 2B" autocomplete="off"></div>
     <p class="login-note" id="modeNote">Your teacher can run many private matches at the same time.</p>
     <button class="btn btn-gold" id="loginButton" onclick="doLogin()">⚓ Find my opponent</button>
     <div id="loginError" style="color:#e74c3c;font-size:12px;margin-top:8px;display:none"></div>
@@ -323,7 +323,7 @@ td.cell.miss{background:rgba(127,140,141,.2)!important;border-color:rgba(127,140
     <span class="ship-art" style="font-size:52px">⚓</span>
     <h2>Finding Your Opponent…</h2>
     <span class="spinner">🌊</span>
-    <p style="color:var(--foam);font-size:13px;margin-top:8px">Waiting for another student to join.<br>Your teacher will start the game soon!</p>
+    <p style="color:var(--foam);font-size:13px;margin-top:8px">Waiting for another learner to join.<br>We'll pair you as soon as someone else is online — or go back and choose <b>Play solo</b>.</p>
     <div id="waitName" style="margin-top:16px;font-weight:800;font-size:14px;color:var(--gold)"></div>
   </div>
 </div>
@@ -933,14 +933,14 @@ function doLogin(){
   const name=document.getElementById('loginName').value.trim();
   const id=document.getElementById('loginId').value.trim();
   const cls=document.getElementById('loginClass').value.trim();
-  if(!name||!id){document.getElementById('loginError').textContent='Please fill in all fields.';document.getElementById('loginError').style.display='block';return;}
+  if(!name){document.getElementById('loginError').textContent='Please enter your name.';document.getElementById('loginError').style.display='block';return;}
   sessionStorage.setItem('vb_n',name);sessionStorage.setItem('vb_i',id);sessionStorage.setItem('vb_c',cls);sessionStorage.setItem('vb_mode',gameMode);
   me={id,name,className:cls};
   socket.emit('studentLogin',{studentId:id,name,className:cls,mode:gameMode,integrationToken:launchToken});
 }
 window.addEventListener('load',()=>{
   setGameMode(gameMode);
-  if(launchProfile){document.getElementById('loginName').value=launchProfile.name||'';document.getElementById('loginId').value=launchProfile.userId||'';document.getElementById('loginClass').value=launchProfile.className||'';}
+  if(launchProfile){document.getElementById('loginName').value=launchProfile.name||'';document.getElementById('loginName').readOnly=true;if(launchProfile.className)document.getElementById('loginClass').value=launchProfile.className;var _idf=document.getElementById('idField');if(_idf)_idf.style.display='none';var _clf=document.getElementById('classField');if(_clf)_clf.style.display='none';}
   const n=sessionStorage.getItem('vb_n'),i=sessionStorage.getItem('vb_i'),c=sessionStorage.getItem('vb_c');
   if(n&&i){document.getElementById('loginName').value=n;document.getElementById('loginId').value=i;if(c)document.getElementById('loginClass').value=c;me={id:i,name:n,className:c||''};show('waitScreen');document.getElementById('waitName').textContent=`Reconnecting as ${n}…`;socket.emit('studentLogin',{studentId:i,name:n,className:c||'',mode:gameMode,integrationToken:launchToken});}
 });

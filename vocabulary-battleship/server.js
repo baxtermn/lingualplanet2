@@ -542,9 +542,15 @@ io.on('connection', socket => {
       classroomId = launch.classroomId ? String(launch.classroomId) : null;
       teacherId = launch.teacherId ? String(launch.teacherId) : null;
       if (role === 'student' && !classroomId) { socket.emit('loginError', {message:'This student account is not connected to a classroom.'}); return; }
-      if (role === 'teacher') { socket.emit('loginError', {message:'Teacher accounts manage games from the classroom dashboard.'}); return; }
+      // A teacher (or the platform owner/admin, who arrives with this role) is
+      // never dropped into a class's student queue — but may still play, as an
+      // individual: solo against Captain Lexi, or in the worldwide pool.
+      if (role === 'teacher') { role = 'individual'; classroomId = null; teacherId = null; }
     }
-    if (!studentId || !name) { socket.emit('loginError', { message:'Please enter your name and student ID.' }); return; }
+    // Name is all that is required. A learner without a student number (any
+    // individual) gets a generated id so they can still play.
+    if (!name) { socket.emit('loginError', { message:'Please enter your name.' }); return; }
+    if (!studentId) studentId = 'guest_' + Math.random().toString(36).slice(2, 10);
     const existing = students[studentId];
 
     if (existing) {
