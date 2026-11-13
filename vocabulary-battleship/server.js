@@ -68,11 +68,40 @@ const GENERAL_BANK = {
           'unusual or surprising','pleasant to sit in or wear','having great value or effect'],
 };
 let bankCustomised = false;
+/* PER-PLAYER WORDS. A player launched from a Lingual Planet site brings that
+   site's signed token; the site answers with the words THIS player should
+   practise (class-assigned sets first, then their own sets and saved words).
+   Every game is then built from its own player's data. */
+const BANK_URLS = { ea: process.env.BANK_URL_EA || 'https://lingualplanet.com/English_Academy/api/battleship-bank.php' };
+async function fetchPlayerBank(userId, token) {
+  const realm = String(userId).split('-')[0];
+  const url = BANK_URLS[realm]; if (!url || !token) return null;
+  try {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 4000);
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }), signal: ctl.signal });
+    clearTimeout(t);
+    const j = await r.json();
+    if (!j || !j.ok || !Array.isArray(j.words) || !j.words.length) return null;
+    return { name: String(j.name || 'Your words'), words: j.words.filter(w => w && w.word && w.definition).slice(0, 60) };
+  } catch (_) { return null; }
+}
 let DEFAULT_BANK = null;   /* the start-up lists, captured once below, for "reset to defaults" */
 function bankFor(pair) {
   const ea = !bankCustomised && (pair || []).some(p => /^ea-/.test(String(p)));
-  return ea ? { name: GENERAL_BANK.name, src: GENERAL_BANK }
-            : { name: bankCustomised ? "Your teacher's word list" : 'Medical terms', src: gameSettings };
+  const base = ea ? { name: GENERAL_BANK.name, src: GENERAL_BANK }
+                  : { name: bankCustomised ? "Your teacher's word list" : 'Medical terms', src: gameSettings };
+  if (bankCustomised) return base;
+  const own = (pair || []).map(p => students[p] && students[p].bank).find(b => b && b.words.length);
+  if (!own) return base;
+  /* their words, shuffled and split across the two edges; the site's default fills any gap */
+  const mine = own.words.slice().sort(() => Math.random() - 0.5);
+  const fill = (terms, defs, from, fromDefs, need) => { for (let i = 0; terms.length < need && i < from.length; i++)
+    if (!terms.includes(from[i])) { terms.push(from[i]); defs.push(fromDefs[i] || ''); } };
+  const half = Math.ceil(mine.length / 2);
+  const vx = mine.slice(0, half).map(w => w.word), dx = mine.slice(0, half).map(w => w.definition);
+  const vy = mine.slice(half).map(w => w.word), dy = mine.slice(half).map(w => w.definition);
+  fill(vx, dx, base.src.vocabX, base.src.defsX, 15); fill(vy, dy, base.src.vocabY, base.src.defsY, 15);
+  return { name: own.words.length >= 30 ? own.name : own.name + ' + ' + base.name, src: { vocabX: vx, defsX: dx, vocabY: vy, defsY: dy } };
 }
 let gameSettings = {
   vocabX: ['cardiology','dermatitis','gastritis','neuralgia','hematology',
@@ -597,7 +626,7 @@ io.on('connection', socket => {
   });
 
   // ── Login / Reconnect ──
-  socket.on('studentLogin', ({ studentId, name, className, mode = 'multiplayer', integrationToken }) => {
+  socket.on('studentLogin', async ({ studentId, name, className, mode = 'multiplayer', integrationToken }) => {
     let role = 'individual', classroomId = null, teacherId = null;
     if (integrationToken) {
       let launch;
@@ -666,7 +695,8 @@ io.on('connection', socket => {
       }
     } else {
       // ── NEW LOGIN ──
-      students[studentId] = { id:studentId, name, className, socketId:socket.id, roomId:null, mode, role, classroomId, teacherId };
+      const bank = integrationToken ? await fetchPlayerBank(studentId, integrationToken) : null;
+      students[studentId] = { id:studentId, name, className, socketId:socket.id, roomId:null, mode, role, classroomId, teacherId, bank };
       socket.emit('loginSuccess', { studentId, name, className });
       if (mode === 'solo') {
         const room = createSoloRoom(studentId);
