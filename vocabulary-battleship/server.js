@@ -459,7 +459,13 @@ io.on('connection', socket => {
 
   // Teacher
   socket.on('teacherJoin', () => { const sc = socket.data.teacherScope; socket.join('teacher:' + sc);
-    socket.emit('settings', sc === 'all' ? gameSettings : settingsFor(sc)); dashboardUpdate(); });
+    let shown = sc === 'all' ? gameSettings : settingsFor(sc);
+    if (sc !== 'all' && !(scopeSettings[sc] && scopeSettings[sc].vocabX)) {
+      /* no list of their own yet: show their site's default, which is what their classes get */
+      const def = /^ea-/.test(sc) ? GENERAL_BANK : (DEFAULT_BANK || gameSettings);
+      shown = Object.assign({}, shown, { vocabX: def.vocabX, defsX: def.defsX, vocabY: def.vocabY, defsY: def.defsY });
+    }
+    socket.emit('settings', shown); socket.emit('teacherScope', { all: sc === 'all' }); dashboardUpdate(); });
   /* Back to the built-in lists: English Academy rooms get Everyday English
      again, MedicomSkills the medical terms. Rooms already playing keep the
      words they were dealt (the server never changed them). */

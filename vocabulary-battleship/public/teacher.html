@@ -89,10 +89,10 @@ input:checked+.toggle-slider::before{transform:translateX(18px)}
       <div class="hsub">Real-time classroom management</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-red btn-sm" onclick="pauseAll()">⏸ Pause All</button>
+      <button class="btn btn-red btn-sm" onclick="pauseAll()"><span class="scope-lbl" data-all="⏸ Pause All" data-mine="⏸ Pause my classes">⏸ Pause my classes</span></button>
       <button class="btn btn-green btn-sm" onclick="resumeAll()">▶ Resume</button>
-      <button class="btn btn-sm" style="background:rgba(243,156,18,.8);color:#fff" onclick="resetAll()">🔄 Reset All</button>
-      <button class="btn btn-sm" style="background:rgba(142,68,173,.8);color:#fff" onclick="endAll()">🏁 End All</button>
+      <button class="btn btn-sm" style="background:rgba(243,156,18,.8);color:#fff" onclick="resetAll()"><span class="scope-lbl" data-all="🔄 Reset All" data-mine="🔄 Reset my classes' games">🔄 Reset my classes' games</span></button>
+      <button class="btn btn-sm" style="background:rgba(142,68,173,.8);color:#fff" onclick="endAll()"><span class="scope-lbl" data-all="🏁 End All" data-mine="🏁 End my classes' games">🏁 End my classes' games</span></button>
     </div>
   </div>
 
@@ -148,7 +148,7 @@ bursitis	inflammation of a fluid-filled sac near a joint</textarea>
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
-        <button class="btn btn-gold" onclick="applyVocab()">⚓ Apply Vocabulary to All Games</button>
+        <button class="btn btn-gold" onclick="applyVocab()"><span class="scope-lbl" data-all="⚓ Apply Vocabulary to All Games" data-mine="⚓ Use this list for my classes">⚓ Use this list for my classes</span></button>
         <button class="btn" style="margin-top:6px" onclick="if(confirmReset())socket.emit('resetBank')">↺ Back to the default word lists</button>
         <div style="font-size:11px;color:var(--foam)" id="vocabStatus">Enter term[TAB]definition per line. Add 10 or more per axis — each game gets 10 randomly selected. Definitions are optional.</div>
       </div>
@@ -486,7 +486,7 @@ function updateTimerLabel(){
 }
 
 function triggerPairing(){ socket.emit('triggerPairing'); toast('⚡ Pairing students…'); }
-function pauseAll(){ socket.emit('pauseAll'); toast('⏸ All games paused'); }
+function pauseAll(){ socket.emit('pauseAll'); toast('⏸ Games paused'); }
 function resumeAll(){ socket.emit('resumeAll'); toast('▶ Games resumed'); }
 function sendAnnounce(){
   const msg=document.getElementById('announceMsg').value.trim();
@@ -557,6 +557,9 @@ function downloadLog(){
 /* Reset: English Academy players get Everyday English again, MedicomSkills the medical list. */
 function confirmReset(){ const b=event&&event.target; if(b&&b.dataset.sure){ return true; } if(b){ b.dataset.sure='1'; b.textContent='Click again to confirm'; setTimeout(()=>{ delete b.dataset.sure; b.textContent='↺ Back to the default word lists'; },4000); } return false; }
 socket.on('bankReset',()=>{ const st=document.getElementById('vocabStatus'); if(st){ st.textContent='✅ Back to the default lists: Everyday English for English Academy, medical terms for MedicomSkills.'; st.style.color='var(--green)'; } toast('Default word lists restored'); });
+
+/* the owner's full view keeps the old "All" labels; a teacher's buttons say they act on their classes */
+socket.on('teacherScope', d => { document.querySelectorAll('.scope-lbl').forEach(el => { el.textContent = d && d.all ? el.dataset.all : el.dataset.mine; }); });
 </script>
 </body>
 </html>
