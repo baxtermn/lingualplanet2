@@ -285,7 +285,7 @@ bursitis	inflammation of a fluid-filled sac near a joint</textarea>
 </div>
 
 <script>
-const socket = io();
+const socket = io({ auth: { teacherToken: window.TEACHER_TOKEN || '' } });
 socket.emit('teacherJoin');
 
 let activityLog = [];

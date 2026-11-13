@@ -14,13 +14,36 @@ const io = new Server(server, { cors: { origin: allowedOrigins, credentials: tru
 app.use(express.json());
 const ADMIN_PASSWORD = process.env.TEACHER_ADMIN_PASSWORD || '';
 function adminAuthorized(header = '') {
-  if (!ADMIN_PASSWORD) return true;
+  if (!ADMIN_PASSWORD) return false;   /* fail closed: no password set means no teacher dashboard */
   if (!header.startsWith('Basic ')) return false;
   try { const [,password] = Buffer.from(header.slice(6),'base64').toString().split(':'); return password === ADMIN_PASSWORD; } catch (_) { return false; }
 }
-app.get('/teacher.html',(req,res,next)=>{
-  if (adminAuthorized(req.get('authorization'))) return next();
-  res.set('WWW-Authenticate','Basic realm="Vocab Battleship Teacher"').status(401).send('Teacher sign-in required');
+/* TEACHER ACCESS. The dashboard page is served only with the password, and it
+   carries a signed, time-limited token; the socket refuses every teacher
+   action without that token (see TEACHER_EVENTS). Before this, any connection
+   could watch every class and change every game. */
+const TEACHER_KEY = crypto.randomBytes(32);          /* new each start: old tokens die with a restart */
+const TEACHER_TOKEN_HOURS = 12;
+function teacherToken() {
+  const t = String(Date.now());
+  return t + '.' + crypto.createHmac('sha256', TEACHER_KEY).update('teacher:' + t).digest('hex');
+}
+function teacherTokenOk(tok) {
+  if (typeof tok !== 'string' || !tok.includes('.')) return false;
+  const [t, mac] = tok.split('.');
+  const want = crypto.createHmac('sha256', TEACHER_KEY).update('teacher:' + t).digest('hex');
+  if (!mac || mac.length !== want.length || !crypto.timingSafeEqual(Buffer.from(mac), Buffer.from(want))) return false;
+  return Date.now() - Number(t) < TEACHER_TOKEN_HOURS * 3600 * 1000;
+}
+app.get('/teacher.html',(req,res)=>{
+  if (!ADMIN_PASSWORD) return res.status(503).send('The teacher dashboard is switched off until TEACHER_ADMIN_PASSWORD is set on the server.');
+  if (!adminAuthorized(req.get('authorization'))) {
+    return res.set('WWW-Authenticate','Basic realm="Vocab Battleship Teacher"').status(401).send('Teacher sign-in required');
+  }
+  const fs = require('fs');
+  const html = fs.readFileSync(path.join(__dirname, 'public', 'teacher.html'), 'utf8')
+    .replace('<head>', '<head><script>window.TEACHER_TOKEN=' + JSON.stringify(teacherToken()) + ';</script>');
+  res.set('Cache-Control', 'no-store').type('html').send(html);
 });
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -335,11 +358,18 @@ function runBotTurn(roomId) {
 }
 
 // ── Socket events ─────────────────────────────────────────────────────────────
+const TEACHER_EVENTS = new Set(['teacherJoin','updateSettings','resetBank','announce','endAll','endRoom',
+  'forceReconnectStudent','manualPair','moveStudent','pauseAll','resetAll','resetRoom','resumeAll','triggerPairing']);
 io.on('connection', socket => {
+  socket.data.isTeacher = teacherTokenOk(socket.handshake.auth && socket.handshake.auth.teacherToken);
+  socket.use(([event], next) => {
+    if (TEACHER_EVENTS.has(event) && !socket.data.isTeacher) return next(new Error('Teacher sign-in required'));
+    next();
+  });
 
   const adminEvents = new Set(['teacherJoin','updateSettings','triggerPairing','pauseAll','resumeAll','announce','forceReconnectStudent','moveStudent','manualPair','resetAll','resetRoom','endRoom','endAll']);
   socket.use(([event],next)=>{
-    if (!adminEvents.has(event) || adminAuthorized(socket.handshake.headers.authorization || '')) return next();
+    if (!adminEvents.has(event) || socket.data.isTeacher || adminAuthorized(socket.handshake.headers.authorization || '')) return next();
     next(new Error('Teacher authorization required'));
   });
 
