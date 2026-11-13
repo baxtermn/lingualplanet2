@@ -171,7 +171,8 @@ td.cell.miss{background:rgba(127,140,141,.2)!important;border-color:rgba(127,140
   .game-header{display:flex;align-items:center;justify-content:space-between;padding:6px 0 8px;flex-wrap:wrap;gap:6px}
   .game-header h1{font-family:'Bangers',cursive;font-size:28px;color:var(--gold);letter-spacing:2px;text-shadow:2px 2px 0 rgba(0,0,0,.4)}
   .scores-row{display:flex;gap:8px}
-  .game-layout{display:grid;grid-template-columns:1fr 300px;gap:12px}
+  .game-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px}
+  .game-layout>*{min-width:0}
   .sidebar{display:flex;flex-direction:column;gap:10px}
   .turn-banner{display:flex;align-items:center;justify-content:space-between;background:rgba(243,156,18,.13);border:1px solid rgba(243,156,18,.28);border-radius:9px;padding:8px 12px;margin-bottom:6px}
   .phase-row{display:flex;gap:5px;margin-bottom:7px}
@@ -185,6 +186,13 @@ td.cell.miss{background:rgba(127,140,141,.2)!important;border-color:rgba(127,140
 /* ═══════════════════════════════════════════
    MOBILE LAYOUT (up to 768px)
 ═══════════════════════════════════════════ */
+@media(min-width:769px) and (max-width:1320px){
+  .board-wrap th{min-width:52px;padding:4px 4px;font-size:10px}
+  .board-wrap th.rh{min-width:70px;width:70px}
+  td.cell{min-width:52px;height:34px}
+}
+td.cell:focus-visible{outline:3px solid #fff;outline-offset:-3px;position:relative;z-index:3}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:768px){
   #gameScreen{align-items:flex-start;padding:4px 4px 180px}
   .game-wrap{width:100%;max-width:100%}
@@ -261,12 +269,12 @@ td.cell.miss{background:rgba(127,140,141,.2)!important;border-color:rgba(127,140
 <div class="speak-modal" id="speakModal">
   <div class="modal-banner"><div class="modal-phase">Your turn — speak!</div><div class="modal-title">📣 Say It Out Loud!</div></div>
   <div class="modal-body">
-    <div class="who-row"><div class="avatar" id="mAvatar">??</div><div><div class="who-role">Say this to your partner:</div><div class="who-name" id="mName">—</div></div></div>
+    <div class="who-row"><div class="avatar" id="mAvatar">??</div><div><div class="who-role" id="mRole">Say this to your partner:</div><div class="who-name" id="mName">—</div></div></div>
     <div class="say-box" id="sayBox">
       <div class="say-label">🎤 Say this sentence:</div>
       <div class="say-sentence">"Is there something at <span class="wx" id="mWordX">—</span> and <span class="wy" id="mWordY">—</span>?"</div>
     </div>
-    <div class="wfd"><div class="wfd-icon">⏳</div>Waiting for your partner to check their grid…<br><small style="color:rgba(255,255,255,.4);font-size:10px;margin-top:4px;display:block">Say the sentence out loud first!</small></div>
+    <div class="wfd"><div class="wfd-icon">⏳</div><span id="mWait">Waiting for your partner to check their grid…</span><br><small style="color:rgba(255,255,255,.4);font-size:10px;margin-top:4px;display:block">Say the sentence out loud first!</small></div>
   </div>
 </div>
 
@@ -1112,6 +1120,11 @@ socket.on('speakPrompt',({wordX,wordY,attackerIdx})=>{
   currentSpeakerIdx = attackerIdx || 0;
   document.getElementById('mAvatar').textContent=me.name.slice(0,2).toUpperCase();
   document.getElementById('mName').textContent=me.name;
+  /* Solo: Captain Lexi is a program. It does not hear you and nothing is
+     recorded — the sentence is your own speaking practice. Say so. */
+  const solo=gameMode==='solo';
+  document.getElementById('mRole').textContent=solo?'Speaking practice — say it out loud for yourself:':'Say this to your partner:';
+  document.getElementById('mWait').textContent=solo?'Captain Lexi is checking the board. Nothing is recorded and your speech is not marked.':'Waiting for your partner to check their grid…';
   document.getElementById('mWordX').textContent=wordX;
   document.getElementById('mWordY').textContent=wordY;
   document.getElementById('sayBox').style.display=settings.hardMode?'none':'block';
@@ -1234,6 +1247,45 @@ function buildGrid(tid,isAtk,isMobile){
     }
     t.appendChild(tr);
   }
+  a11yGrid(t,isAtk);
+}
+
+/* ── Keyboard and screen-reader play ─────────────────────────────────────
+   One tab stop per board (roving tabindex), arrow keys move, Enter or
+   Space attacks/places. Each cell is named by its two words and its state,
+   and a hit or miss is announced once. */
+function cellName(td,isAtk){
+  const r=+td.dataset.r,c=+td.dataset.c;
+  const st=td.classList.contains('hit')?'hit':td.classList.contains('miss')?'miss':td.classList.contains('ship-here')?'your ship':isAtk?'not attacked yet':'empty';
+  return `${vocabX[c]||String.fromCharCode(65+c)} × ${vocabY[r]||(r+1)}, column ${c+1}, row ${r+1}: ${st}`;
+}
+function srSay(msg){let el=document.getElementById('srLive');if(!el){el=document.createElement('div');el.id='srLive';el.className='sr-only';el.setAttribute('aria-live','polite');document.body.appendChild(el);}el.textContent='';setTimeout(()=>{el.textContent=msg;},40);}
+function a11yGrid(t,isAtk){
+  t.setAttribute('role','grid');
+  t.setAttribute('aria-label',isAtk?'Enemy waters: choose a square to attack':'Your fleet: choose where to place a ship');
+  t.querySelectorAll('tr').forEach(tr=>tr.setAttribute('role','row'));
+  t.querySelectorAll('th').forEach(th=>th.setAttribute('role',th.classList.contains('rh')?'rowheader':'columnheader'));
+  const cells=[...t.querySelectorAll('td.cell')];
+  cells.forEach((td,i)=>{
+    td.setAttribute('role','gridcell');td.tabIndex=i===0?0:-1;td.setAttribute('aria-label',cellName(td,isAtk));
+    new MutationObserver(()=>{
+      const was=td.dataset.st||'',now=td.classList.contains('hit')?'hit':td.classList.contains('miss')?'miss':'';
+      td.setAttribute('aria-label',cellName(td,isAtk));
+      if(now&&now!==was){td.dataset.st=now;if(isAtk)srSay(`${now==='hit'?'Hit':'Miss'}: ${vocabX[+td.dataset.c]||''} × ${vocabY[+td.dataset.r]||''}.`);}
+    }).observe(td,{attributes:true,attributeFilter:['class']});
+  });
+  t.addEventListener('focusin',e=>{const td=e.target.closest&&e.target.closest('td.cell');if(td){cells.forEach(x=>x.tabIndex=-1);td.tabIndex=0;}});
+  t.addEventListener('keydown',e=>{
+    const td=e.target.closest&&e.target.closest('td.cell');if(!td)return;
+    let r=+td.dataset.r,c=+td.dataset.c;
+    if(e.key==='ArrowRight')c=Math.min(GS-1,c+1);else if(e.key==='ArrowLeft')c=Math.max(0,c-1);
+    else if(e.key==='ArrowDown')r=Math.min(GS-1,r+1);else if(e.key==='ArrowUp')r=Math.max(0,r-1);
+    else if(e.key==='Home')c=0;else if(e.key==='End')c=GS-1;
+    else if(e.key==='Enter'||e.key===' '){e.preventDefault();td.click();return;}
+    else return;
+    e.preventDefault();
+    const n=t.querySelector(`td[data-r="${r}"][data-c="${c}"]`);if(n){n.focus();if(!isAtk&&typeof prevShip==='function')prevShip(r,c);}
+  });
 }
 
 function rebuildHeaders(){
@@ -1244,6 +1296,7 @@ function rebuildHeaders(){
       const w=vocabX[i];if(!w)return;
       th.textContent=isMobile?String.fromCharCode(65+i):(w.length>12?w.slice(0,11)+'…':w);th.title=w;
     });
+    t.querySelectorAll('td.cell').forEach(td=>td.setAttribute('aria-label',cellName(td,tid.startsWith('atk'))));
     t.querySelectorAll('th.rh').forEach((th,i)=>{
       if(i===0)return;const w=vocabY[i-1];if(!w)return;
       th.textContent=isMobile?String(i):(w.length>12?w.slice(0,11)+'…':w);th.title=w;
