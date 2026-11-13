@@ -24,25 +24,37 @@ function adminAuthorized(header = '') {
    could watch every class and change every game. */
 const TEACHER_KEY = crypto.randomBytes(32);          /* new each start: old tokens die with a restart */
 const TEACHER_TOKEN_HOURS = 12;
-function teacherToken() {
-  const t = String(Date.now());
-  return t + '.' + crypto.createHmac('sha256', TEACHER_KEY).update('teacher:' + t).digest('hex');
+function teacherToken(scope = 'all') {
+  const t = String(Date.now()), sc = Buffer.from(String(scope)).toString('base64url');
+  return t + '.' + sc + '.' + crypto.createHmac('sha256', TEACHER_KEY).update('teacher:' + t + ':' + sc).digest('hex');
 }
+/* the scope ('all' or a teacherId) when valid, otherwise null */
 function teacherTokenOk(tok) {
-  if (typeof tok !== 'string' || !tok.includes('.')) return false;
-  const [t, mac] = tok.split('.');
-  const want = crypto.createHmac('sha256', TEACHER_KEY).update('teacher:' + t).digest('hex');
-  if (!mac || mac.length !== want.length || !crypto.timingSafeEqual(Buffer.from(mac), Buffer.from(want))) return false;
-  return Date.now() - Number(t) < TEACHER_TOKEN_HOURS * 3600 * 1000;
+  if (typeof tok !== 'string') return null;
+  const parts = tok.split('.'); if (parts.length !== 3) return null;
+  const [t, sc, mac] = parts;
+  const want = crypto.createHmac('sha256', TEACHER_KEY).update('teacher:' + t + ':' + sc).digest('hex');
+  if (!mac || mac.length !== want.length || !crypto.timingSafeEqual(Buffer.from(mac), Buffer.from(want))) return null;
+  if (Date.now() - Number(t) >= TEACHER_TOKEN_HOURS * 3600 * 1000) return null;
+  return Buffer.from(sc, 'base64url').toString() || null;
 }
 app.get('/teacher.html',(req,res)=>{
-  if (!ADMIN_PASSWORD) return res.status(503).send('The teacher dashboard is switched off until TEACHER_ADMIN_PASSWORD is set on the server.');
-  if (!adminAuthorized(req.get('authorization'))) {
-    return res.set('WWW-Authenticate','Basic realm="Vocab Battleship Teacher"').status(401).send('Teacher sign-in required');
+  let scope = null;
+  const lt = typeof req.query.lpToken === 'string' ? req.query.lpToken : '';
+  if (lt) {
+    let launch = null; try { launch = verifyLaunch(lt); } catch (_) {}
+    if (!launch || launch.role !== 'teacher') return res.status(403).send('This teacher link has expired. Open the dashboard again from your Lingual Planet site.');
+    scope = String(launch.teacherId || launch.userId);
+  } else {
+    if (!ADMIN_PASSWORD) return res.status(503).send('The teacher dashboard is switched off until TEACHER_ADMIN_PASSWORD is set on the server.');
+    if (!adminAuthorized(req.get('authorization'))) {
+      return res.set('WWW-Authenticate','Basic realm="Vocab Battleship Teacher"').status(401).send('Teacher sign-in required');
+    }
+    scope = 'all';
   }
   const fs = require('fs');
   const html = fs.readFileSync(path.join(__dirname, 'public', 'teacher.html'), 'utf8')
-    .replace('<head>', '<head><script>window.TEACHER_TOKEN=' + JSON.stringify(teacherToken()) + ';</script>');
+    .replace('<head>', '<head><script>window.TEACHER_TOKEN=' + JSON.stringify(teacherToken(scope)) + ';</script>');
   res.set('Cache-Control', 'no-store').type('html').send(html);
 });
 app.use(express.static(path.join(__dirname, 'public')));
@@ -87,6 +99,8 @@ async function fetchPlayerBank(userId, token) {
 }
 let DEFAULT_BANK = null;   /* the start-up lists, captured once below, for "reset to defaults" */
 function bankFor(pair) {
+  const tid = teacherOfPair(pair), ts = tid && scopeSettings[tid];
+  if (ts && ts.vocabX && ts.vocabY) return { name: "Your teacher's word list", src: { vocabX: ts.vocabX, defsX: ts.defsX || [], vocabY: ts.vocabY, defsY: ts.defsY || [] } };
   const ea = !bankCustomised && (pair || []).some(p => /^ea-/.test(String(p)));
   const base = ea ? { name: GENERAL_BANK.name, src: GENERAL_BANK }
                   : { name: bankCustomised ? "Your teacher's word list" : 'Medical terms', src: gameSettings };
@@ -152,7 +166,7 @@ function matchmakingScope(student) {
 function makeRoom(pair, mode = 'multiplayer', scope = null) {
   const roomId = 'room_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
   const room = {
-    id: roomId, players: pair, mode, matchmakingScope:scope || matchmakingScope(students[pair[0]]),
+    id: roomId, players: pair, mode, matchmakingScope:scope || matchmakingScope(students[pair[0]]), teacherId: teacherOfPair(pair),
     phase: 'paired',
     beginClicked: {},
     placingDone: {},
@@ -304,27 +318,56 @@ function sendRoomState(roomId) {
       defsX: room.defsX || [],
       defsY: room.defsY || [],
       bankName: room.bankName || '',
-      showDefs: gameSettings.showDefs !== false,
-      settings: gameSettings,
+      showDefs: settingsFor(room.teacherId).showDefs !== false,
+      settings: settingsFor(room.teacherId),
     });
   });
 }
 
-function dashboardUpdate() {
-  io.to('teacher').emit('dashboardUpdate', {
-    rooms: Object.values(rooms).map(r => ({
+/* ═══ PER-TEACHER SCOPE ═══
+   A teacher who arrives from a Lingual Planet site (signed launch) is scoped to
+   their own classes: they see, set and control only games whose players name
+   them as teacher. The password login is the site owner and sees everything
+   ('all'). Settings and word lists a teacher saves apply to their classes only. */
+const scopeSettings = {};   /* teacherId -> { timerEnabled, ..., vocabX/defsX/vocabY/defsY when they saved a list } */
+function inScope(scope, sid) { return scope === 'all' || (!!students[sid] && students[sid].teacherId === scope); }
+function roomInScope(scope, rid) { const r = rooms[rid]; return !!r && (scope === 'all' || r.players.some(p => inScope(scope, p))); }
+function teacherOfPair(pair) { for (const p of pair || []) if (students[p] && students[p].teacherId) return students[p].teacherId; return null; }
+function settingsFor(teacherId) {
+  const base = Object.assign({}, gameSettings);
+  return teacherId && scopeSettings[teacherId] ? Object.assign(base, scopeSettings[teacherId]) : base;
+}
+function emitScoped(scope, ev, data) {
+  if (scope === 'all') return io.emit(ev, data);
+  Object.values(students).forEach(st => { if (st.teacherId === scope && st.socketId) io.to(st.socketId).emit(ev, data); });
+}
+function dashboardFor(scope) {
+  const rs = Object.values(rooms).filter(r => roomInScope(scope, r.id));
+  const ids = new Set(rs.map(r => r.id));
+  return {
+    rooms: rs.map(r => ({
       id: r.id, phase: r.phase,
       players: r.players.map(p=>({id:p,name:students[p]?.name||p,score:r.scores[p]})),
       totalShips: 5 * r.players.length,
       sunkShips: r.players.reduce((a,p)=>a+Object.values(r.shipHealth[p]||{}).filter(v=>v<=0).length,0),
     })),
-    waiting: waitingQueue.map(id=>({id,name:students[id]?.name||id})),
-    activityLog: activityLog.slice(-50),
-    settings: gameSettings,
-    studentCount: Object.keys(students).length,
-  });
+    waiting: waitingQueue.filter(id => inScope(scope, id)).map(id=>({id,name:students[id]?.name||id})),
+    activityLog: activityLog.filter(a => scope === 'all' || ids.has(a.room)).slice(-50),
+    settings: scope === 'all' ? gameSettings : settingsFor(scope),
+    studentCount: Object.keys(students).filter(id => inScope(scope, id)).length,
+  };
 }
-
+/* Debounced, and each teacher gets only their own classes — not every game to every teacher. */
+let dashTimer = null;
+function dashboardUpdate() {
+  if (dashTimer) return;
+  dashTimer = setTimeout(() => {
+    dashTimer = null;
+    const scopes = new Set();
+    for (const [name, members] of io.sockets.adapter.rooms) if (name.startsWith('teacher:') && members.size) scopes.add(name.slice(8));
+    scopes.forEach(sc => io.to('teacher:' + sc).emit('dashboardUpdate', dashboardFor(sc)));
+  }, 300);
+}
 function doPairing(scope) {
   const queue = waitingQueue.filter(id=>matchmakingScope(students[id])===scope);
   const otherWaiting = waitingQueue.filter(id=>matchmakingScope(students[id])!==scope);
@@ -390,9 +433,15 @@ function runBotTurn(roomId) {
 const TEACHER_EVENTS = new Set(['teacherJoin','updateSettings','resetBank','announce','endAll','endRoom',
   'forceReconnectStudent','manualPair','moveStudent','pauseAll','resetAll','resetRoom','resumeAll','triggerPairing']);
 io.on('connection', socket => {
-  socket.data.isTeacher = teacherTokenOk(socket.handshake.auth && socket.handshake.auth.teacherToken);
-  socket.use(([event], next) => {
-    if (TEACHER_EVENTS.has(event) && !socket.data.isTeacher) return next(new Error('Teacher sign-in required'));
+  socket.data.teacherScope = teacherTokenOk(socket.handshake.auth && socket.handshake.auth.teacherToken);
+  socket.data.isTeacher = !!socket.data.teacherScope;
+  socket.use(([event, arg], next) => {
+    if (!TEACHER_EVENTS.has(event)) return next();
+    if (!socket.data.isTeacher) return next(new Error('Teacher sign-in required'));
+    const sc = socket.data.teacherScope, a = arg || {};
+    const sids = [a.studentId, a.fromStudentId, a.toStudentId].concat(Array.isArray(a.studentIds) ? a.studentIds : []).filter(Boolean);
+    if (sids.some(id => students[id] && !inScope(sc, id))) return next(new Error('That student is not in your classes'));
+    if (a.roomId && rooms[a.roomId] && !roomInScope(sc, a.roomId)) return next(new Error('That game is not in your classes'));
     next();
   });
 
@@ -403,18 +452,32 @@ io.on('connection', socket => {
   });
 
   // Teacher
-  socket.on('teacherJoin', () => { socket.join('teacher'); socket.emit('settings', gameSettings); dashboardUpdate(); });
+  socket.on('teacherJoin', () => { const sc = socket.data.teacherScope; socket.join('teacher:' + sc);
+    socket.emit('settings', sc === 'all' ? gameSettings : settingsFor(sc)); dashboardUpdate(); });
   /* Back to the built-in lists: English Academy rooms get Everyday English
      again, MedicomSkills the medical terms. Rooms already playing keep the
      words they were dealt (the server never changed them). */
   socket.on('resetBank', () => {
+    const sc = socket.data.teacherScope;
+    if (sc !== 'all') { if (scopeSettings[sc]) ['vocabX','defsX','vocabY','defsY'].forEach(k => delete scopeSettings[sc][k]);
+      dashboardUpdate(); socket.emit('settingsSaved'); socket.emit('bankReset'); return; }
     if (DEFAULT_BANK) Object.assign(gameSettings, JSON.parse(JSON.stringify(DEFAULT_BANK)));
     bankCustomised = false;
     dashboardUpdate(); socket.emit('settingsSaved'); socket.emit('bankReset');
   });
-  socket.on('updateSettings', data => { if (data && (data.vocabX || data.vocabY)) bankCustomised = true; Object.assign(gameSettings, data); Object.keys(rooms).forEach(rid=>io.to(rid).emit('settingsUpdated',gameSettings)); dashboardUpdate(); socket.emit('settingsSaved'); });
+  socket.on('updateSettings', data => {
+    const sc = socket.data.teacherScope;
+    if (sc !== 'all') {   /* a teacher's settings and list: their classes only */
+      scopeSettings[sc] = Object.assign(scopeSettings[sc] || {}, data || {});
+      Object.keys(rooms).filter(rid => roomInScope(sc, rid)).forEach(rid => { const r = rooms[rid];
+        const st = settingsFor(r.teacherId); const shown = Object.assign({}, st, { vocabX: r.vocabX, vocabY: r.vocabY, defsX: r.defsX, defsY: r.defsY });
+        io.to(rid).emit('settingsUpdated', shown); });
+      dashboardUpdate(); socket.emit('settingsSaved'); return;
+    }
+    if (data && (data.vocabX || data.vocabY)) bankCustomised = true; Object.assign(gameSettings, data); Object.keys(rooms).forEach(rid=>io.to(rid).emit('settingsUpdated',gameSettings)); dashboardUpdate(); socket.emit('settingsSaved'); });
   socket.on('triggerPairing', () => {
-    const scopes = [...new Set(waitingQueue.map(id=>matchmakingScope(students[id])))];
+    const sc = socket.data.teacherScope;
+    const scopes = [...new Set(waitingQueue.filter(id => inScope(sc, id)).map(id=>matchmakingScope(students[id])))];
     scopes.flatMap(scope=>doPairing(scope)).forEach(rid => {
       const room = rooms[rid];
       room.players.forEach(pid => {
@@ -427,9 +490,9 @@ io.on('connection', socket => {
     });
     dashboardUpdate();
   });
-  socket.on('pauseAll', () => io.emit('gamePaused'));
-  socket.on('resumeAll', () => io.emit('gameResumed'));
-  socket.on('announce', msg => io.emit('announcement', msg));
+  socket.on('pauseAll', () => emitScoped(socket.data.teacherScope, 'gamePaused'));
+  socket.on('resumeAll', () => emitScoped(socket.data.teacherScope, 'gameResumed'));
+  socket.on('announce', msg => emitScoped(socket.data.teacherScope, 'announcement', msg));
 
   // ── Teacher forces a student back into their original room ──
   socket.on('forceReconnectStudent', ({ studentId }) => {
@@ -562,12 +625,11 @@ io.on('connection', socket => {
   // ── Reset all games (teacher) ──
   socket.on('resetAll', () => {
     // Notify all students their game was reset
-    io.emit('gameReset', { reason: 'Teacher reset all games' });
-    // Clear all rooms and re-queue students
-    Object.keys(rooms).forEach(rid => deleteRoom(rid));
-    waitingQueue = [];
-    // Clear student room assignments
-    Object.values(students).forEach(s => { s.roomId = null; });
+    const sc = socket.data.teacherScope;
+    emitScoped(sc, 'gameReset', { reason: 'Teacher reset all games' });
+    Object.keys(rooms).filter(rid => roomInScope(sc, rid)).forEach(rid => {
+      rooms[rid].players.forEach(p => { if (students[p]) students[p].roomId = null; }); deleteRoom(rid); });
+    waitingQueue = waitingQueue.filter(id => !inScope(sc, id));
     dashboardUpdate();
     socket.emit('resetAllDone');
   });
@@ -605,12 +667,13 @@ io.on('connection', socket => {
 
   // ── Teacher end ALL rooms ──
   socket.on('endAll', () => {
-    io.emit('gameEnded', { reason: 'Teacher ended all games' });
-    Object.keys(rooms).forEach(rid => {
+    const sc = socket.data.teacherScope;
+    emitScoped(sc, 'gameEnded', { reason: 'Teacher ended all games' });
+    Object.keys(rooms).filter(rid => roomInScope(sc, rid)).forEach(rid => {
       Object.values(students).forEach(s => { if (s.roomId === rid) s.roomId = null; });
       deleteRoom(rid);
     });
-    waitingQueue = [];
+    waitingQueue = waitingQueue.filter(id => !inScope(sc, id));
     dashboardUpdate();
     socket.emit('endAllDone');
   });
