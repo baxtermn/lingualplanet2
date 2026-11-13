@@ -99,15 +99,19 @@ async function fetchPlayerBank(userId, token) {
 }
 let DEFAULT_BANK = null;   /* the start-up lists, captured once below, for "reset to defaults" */
 function bankFor(pair) {
+  /* 1. a teacher's own list, for their classes */
   const tid = teacherOfPair(pair), ts = tid && scopeSettings[tid];
   if (ts && ts.vocabX && ts.vocabY) return { name: "Your teacher's word list", src: { vocabX: ts.vocabX, defsX: ts.defsX || [], vocabY: ts.vocabY, defsY: ts.defsY || [] } };
-  const ea = !bankCustomised && (pair || []).some(p => /^ea-/.test(String(p)));
-  const base = ea ? { name: GENERAL_BANK.name, src: GENERAL_BANK }
-                  : { name: bankCustomised ? "Your teacher's word list" : 'Medical terms', src: gameSettings };
-  if (bankCustomised) return base;
+  /* 2. the site's own default: Everyday English (ea-), the medical list (ms-);
+        guests with no site get the owner's dashboard list if one was saved */
+  const realmOf = p => (/^(ea|ms)-/.exec(String(p)) || [])[1];
+  const realm = (pair || []).map(realmOf).find(Boolean);
+  const base = realm === 'ea' ? { name: GENERAL_BANK.name, src: GENERAL_BANK }
+             : realm === 'ms' ? { name: 'Medical terms', src: DEFAULT_BANK || gameSettings }
+             : { name: bankCustomised ? 'Word list set by the site' : 'Medical terms', src: gameSettings };
+  /* 3. the player's own words, topped up from their site's default */
   const own = (pair || []).map(p => students[p] && students[p].bank).find(b => b && b.words.length);
   if (!own) return base;
-  /* their words, shuffled and split across the two edges; the site's default fills any gap */
   const mine = own.words.slice().sort(() => Math.random() - 0.5);
   const fill = (terms, defs, from, fromDefs, need) => { for (let i = 0; terms.length < need && i < from.length; i++)
     if (!terms.includes(from[i])) { terms.push(from[i]); defs.push(fromDefs[i] || ''); } };
@@ -160,7 +164,9 @@ function verifyLaunch(token) {
 // ── Room factory ──────────────────────────────────────────────────────────────
 function matchmakingScope(student) {
   if (student?.role === 'student' && student.classroomId) return `classroom:${student.classroomId}`;
-  return 'individual:public';
+  /* individuals are matched only with individuals from the same site (ea-, ms-), guests with guests */
+  const realm = /^(ea|ms)-/.exec(String(student?.id || ''));
+  return 'individual:' + (realm ? realm[1] : 'guest');
 }
 
 function makeRoom(pair, mode = 'multiplayer', scope = null) {
