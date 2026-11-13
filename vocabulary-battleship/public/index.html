@@ -258,6 +258,7 @@ td.cell:focus-visible{outline:3px solid #fff;outline-offset:-3px;position:relati
 </style>
 </head>
 <body>
+<a id="lpBack" href="#" hidden style="position:fixed;top:10px;left:10px;z-index:500;padding:6px 12px;border-radius:999px;background:rgba(0,0,0,.45);color:#fff;font:700 13px Nunito,sans-serif;text-decoration:none;border:1px solid rgba(255,255,255,.3)">← Back</a>
 <div class="bg"></div>
 <div class="toast" id="toast"></div>
 <div class="flash" id="flash"></div>
@@ -537,6 +538,16 @@ let gameMode=sessionStorage.getItem('vb_mode')||'multiplayer';
 const launchToken=new URLSearchParams(location.search).get('lpToken')||'';
 let launchProfile=null;
 if(launchToken){try{launchProfile=JSON.parse(atob(launchToken.split('.')[0].replace(/-/g,'+').replace(/_/g,'/')));}catch(_){launchProfile=null;}}
+/* PLAY-02: a way back to the learning site the player came from. The launch says which site;
+   remembered for the session so it survives the game's own screens. */
+(function(){ try {
+  const realm = launchProfile && String(launchProfile.userId || '').split('-')[0];
+  const home = realm === 'ea' ? { url: 'https://lingualplanet.com/English_Academy/index.php?p=games', label: '← English Academy' }
+             : realm === 'ms' && /^https:\/\/[^/]*lingualplanet\.com\//.test(document.referrer) ? { url: document.referrer, label: '← MedicomSkills' } : null;
+  if (home) sessionStorage.setItem('lpBack', JSON.stringify(home));
+  const b = JSON.parse(sessionStorage.getItem('lpBack') || 'null'), el = document.getElementById('lpBack');
+  if (b && el) { el.href = b.url; el.textContent = b.label; el.hidden = false; }
+} catch (_) {} })();
 
 // ══════════════════════════════════════════════════
 // 🔊 SPEECH SYNTHESIS
