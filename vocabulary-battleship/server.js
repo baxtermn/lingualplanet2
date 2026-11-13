@@ -972,6 +972,23 @@ io.on('connection', socket => {
           dashboardUpdate();
         }
       }, 8000);
+      /* Clean-up: a player gone for good (default 10 minutes) is removed, with any game
+         that no connected person is still in and its Captain Lexi. Without this every
+         player and finished game stayed in memory until the next restart. */
+      setTimeout(() => {
+        if (student.socketId || students[student.id] !== student) return;   // came back, or already replaced
+        const rid = student.roomId, room = rid && rooms[rid];
+        if (room) {
+          const someoneHere = room.players.some(p => students[p] && !students[p].isBot && students[p].socketId);
+          if (!someoneHere) {
+            room.players.forEach(p => { if (students[p] && students[p].isBot) delete students[p]; else if (students[p]) students[p].roomId = null; });
+            deleteRoom(rid);
+          }
+        }
+        waitingQueue = waitingQueue.filter(id => id !== student.id);
+        if (!student.roomId || !rooms[student.roomId]) delete students[student.id];
+        dashboardUpdate();
+      }, Number(process.env.CLEANUP_MS || 10 * 60 * 1000));
     }
   });
 });
