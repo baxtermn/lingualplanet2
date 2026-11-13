@@ -25,6 +25,31 @@ app.get('/teacher.html',(req,res,next)=>{
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── State ─────────────────────────────────────────────────────────────────────
+/* English Academy learners (ids starting "ea-") get everyday English by
+   default; MedicomSkills keeps the medical list below. A list a teacher
+   saves from the dashboard replaces both, for everyone, until restart. */
+const GENERAL_BANK = {
+  name: 'Everyday English (A2–B1)',
+  vocabX: ['appointment','borrow','crowded','delay','describe','forget','invite','journey',
+           'kitchen','neighbour','polite','receipt','suggest','weather','weekend'],
+  defsX: ['a fixed time to meet someone','to take something and give it back later','full of people',
+          'a time when something happens later than planned','to say what something is like','to not remember',
+          'to ask someone to come to an event','a trip from one place to another','the room where you cook',
+          'a person who lives near you','kind and showing good manners','a paper that shows what you paid',
+          'to give an idea for someone to think about','how hot, cold, wet or dry it is outside','Saturday and Sunday'],
+  vocabY: ['quiet','early','expensive','friendly','tired','busy','careful','ready',
+           'difficult','famous','hungry','useful','strange','comfortable','important'],
+  defsY: ['making very little noise','before the usual or planned time','costing a lot of money',
+          'kind and pleasant to other people','needing rest or sleep','having a lot to do','paying attention to avoid mistakes',
+          'prepared to do something','not easy','known by many people','wanting to eat','helpful for doing something',
+          'unusual or surprising','pleasant to sit in or wear','having great value or effect'],
+};
+let bankCustomised = false;
+function bankFor(pair) {
+  const ea = !bankCustomised && (pair || []).some(p => /^ea-/.test(String(p)));
+  return ea ? { name: GENERAL_BANK.name, src: GENERAL_BANK }
+            : { name: bankCustomised ? "Your teacher's word list" : 'Medical terms', src: gameSettings };
+}
 let gameSettings = {
   vocabX: ['cardiology','dermatitis','gastritis','neuralgia','hematology',
            'bronchitis','arthroscopy','myalgia','thoracotomy','carcinoma',
@@ -85,9 +110,10 @@ function makeRoom(pair, mode = 'multiplayer', scope = null) {
     scores: {},
     powerups: {},
     ...(() => {
-      const rx = pickWords(gameSettings.vocabX, gameSettings.defsX);
-      const ry = pickWords(gameSettings.vocabY, gameSettings.defsY);
-      return { vocabX: rx.terms, defsX: rx.defs, vocabY: ry.terms, defsY: ry.defs };
+      const bank = bankFor(pair);
+      const rx = pickWords(bank.src.vocabX, bank.src.defsX);
+      const ry = pickWords(bank.src.vocabY, bank.src.defsY);
+      return { vocabX: rx.terms, defsX: rx.defs, vocabY: ry.terms, defsY: ry.defs, bankName: bank.name };
     })(),
   };
   pair.forEach(pid => {
@@ -222,6 +248,7 @@ function sendRoomState(roomId) {
       vocabY: room.vocabY,
       defsX: room.defsX || [],
       defsY: room.defsY || [],
+      bankName: room.bankName || '',
       showDefs: gameSettings.showDefs !== false,
       settings: gameSettings,
     });
@@ -315,7 +342,7 @@ io.on('connection', socket => {
 
   // Teacher
   socket.on('teacherJoin', () => { socket.join('teacher'); socket.emit('settings', gameSettings); dashboardUpdate(); });
-  socket.on('updateSettings', data => { Object.assign(gameSettings, data); Object.keys(rooms).forEach(rid=>io.to(rid).emit('settingsUpdated',gameSettings)); dashboardUpdate(); socket.emit('settingsSaved'); });
+  socket.on('updateSettings', data => { if (data && (data.vocabX || data.vocabY)) bankCustomised = true; Object.assign(gameSettings, data); Object.keys(rooms).forEach(rid=>io.to(rid).emit('settingsUpdated',gameSettings)); dashboardUpdate(); socket.emit('settingsSaved'); });
   socket.on('triggerPairing', () => {
     const scopes = [...new Set(waitingQueue.map(id=>matchmakingScope(students[id])))];
     scopes.flatMap(scope=>doPairing(scope)).forEach(rid => {
@@ -659,8 +686,10 @@ io.on('connection', socket => {
           clearInterval(room.vocabRefreshInterval);
           return;
         }
-        const rx = pickWords(gameSettings.vocabX, gameSettings.defsX);
-        const ry = pickWords(gameSettings.vocabY, gameSettings.defsY);
+        const bank = bankFor(room.players);
+        const rx = pickWords(bank.src.vocabX, bank.src.defsX);
+        const ry = pickWords(bank.src.vocabY, bank.src.defsY);
+        room.bankName = bank.name;
         room.vocabX = rx.terms; room.defsX = rx.defs;
         room.vocabY = ry.terms; room.defsY = ry.defs;
         io.to(roomId).emit('vocabRefresh', { vocabX: room.vocabX, defsX: room.defsX, vocabY: room.vocabY, defsY: room.defsY });

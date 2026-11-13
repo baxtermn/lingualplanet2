@@ -373,7 +373,7 @@ td.cell:focus-visible{outline:3px solid #fff;outline-offset:-3px;position:relati
         <div><div class="turn-main" id="turnTextD">🚢 Place your ships!</div><div class="turn-sub" id="turnSubD">Tap Your Fleet grid to position each ship</div></div>
       </div>
       <div class="phase-row"><div class="ph" id="ph1">1 · Select</div><div class="ph" id="ph2">2 · Speak</div><div class="ph" id="ph3">3 · Defend</div><div class="ph" id="ph4">4 · Result</div></div>
-      <div class="board-lbl"><div class="dot"></div>Enemy Waters — click to attack</div>
+      <div class="board-lbl"><div class="dot"></div>Enemy Waters — click to attack <span class="bank-name" style="margin-left:8px;opacity:.8;font-weight:600"></span></div>
       <div class="board-wrap"><table id="atkTblD"></table></div>
       <div class="board-lbl" style="margin-top:12px">Your Fleet</div>
       <div class="board-wrap"><table id="myTblD"></table></div>
@@ -978,6 +978,7 @@ function clickBegin(){
 socket.on('waitingForPartnerReady',()=>{document.getElementById('waitPartnerMsg').style.display='block';});
 socket.on('settingsUpdated',(s)=>{
   settings=s;
+  if(s.vocabX) document.querySelectorAll('.bank-name').forEach(el=>{el.textContent="Word list: Your teacher's word list";});
   vocabX=s.vocabX;vocabY=s.vocabY;defsX=s.defsX||[];defsY=s.defsY||[];showDefs=s.showDefs!==false;
   if(gridsBuilt)rebuildHeaders();
   applyTimerSettings();
@@ -988,6 +989,7 @@ socket.on('settingsUpdated',(s)=>{
 // ── Room state ────────────────────────────────────────────────────────────
 socket.on('roomState',state=>{
   roomId=state.roomId;phase=state.phase;vocabX=state.vocabX;vocabY=state.vocabY;defsX=state.defsX||[];defsY=state.defsY||[];showDefs=state.showDefs!==false;settings=state.settings;
+  document.querySelectorAll('.bank-name').forEach(el=>{el.textContent=state.bankName?('Word list: '+state.bankName):'';});
   const opp=state.players.find(p=>!p.isYou);
   if(opp){opponentName=opp.name;setOppInfo(opp.name,`ID: ${opp.id}`,'● Online','var(--green)');}
   const me2=state.players.find(p=>p.isYou);
