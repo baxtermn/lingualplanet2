@@ -149,6 +149,7 @@ bursitis	inflammation of a fluid-filled sac near a joint</textarea>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
         <button class="btn btn-gold" onclick="applyVocab()">⚓ Apply Vocabulary to All Games</button>
+        <button class="btn" style="margin-top:6px" onclick="if(confirmReset())socket.emit('resetBank')">↺ Back to the default word lists</button>
         <div style="font-size:11px;color:var(--foam)" id="vocabStatus">Enter term[TAB]definition per line. Add 10 or more per axis — each game gets 10 randomly selected. Definitions are optional.</div>
       </div>
     </div>
@@ -552,6 +553,10 @@ function downloadLog(){
   a.download='vocab_battleship_log.csv'; a.click();
   toast('📊 Log exported!');
 }
+
+/* Reset: English Academy players get Everyday English again, MedicomSkills the medical list. */
+function confirmReset(){ const b=event&&event.target; if(b&&b.dataset.sure){ return true; } if(b){ b.dataset.sure='1'; b.textContent='Click again to confirm'; setTimeout(()=>{ delete b.dataset.sure; b.textContent='↺ Back to the default word lists'; },4000); } return false; }
+socket.on('bankReset',()=>{ const st=document.getElementById('vocabStatus'); if(st){ st.textContent='✅ Back to the default lists: Everyday English for English Academy, medical terms for MedicomSkills.'; st.style.color='var(--green)'; } toast('Default word lists restored'); });
 </script>
 </body>
 </html>

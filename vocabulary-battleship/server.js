@@ -45,6 +45,7 @@ const GENERAL_BANK = {
           'unusual or surprising','pleasant to sit in or wear','having great value or effect'],
 };
 let bankCustomised = false;
+let DEFAULT_BANK = null;   /* the start-up lists, captured once below, for "reset to defaults" */
 function bankFor(pair) {
   const ea = !bankCustomised && (pair || []).some(p => /^ea-/.test(String(p)));
   return ea ? { name: GENERAL_BANK.name, src: GENERAL_BANK }
@@ -62,6 +63,8 @@ let gameSettings = {
   timerEnabled: false, showPrompt: true, hardMode: false, timerSeconds: 60,
   speechEnabled: true, preferredVoice: 'Google US English', showDefs: true,
 };
+DEFAULT_BANK = JSON.parse(JSON.stringify({ vocabX: gameSettings.vocabX, defsX: gameSettings.defsX, vocabY: gameSettings.vocabY, defsY: gameSettings.defsY }));
+
 
 const students = {}; // id → { id, name, className, socketId, roomId }
 const rooms = {};    // id → room object
@@ -342,6 +345,14 @@ io.on('connection', socket => {
 
   // Teacher
   socket.on('teacherJoin', () => { socket.join('teacher'); socket.emit('settings', gameSettings); dashboardUpdate(); });
+  /* Back to the built-in lists: English Academy rooms get Everyday English
+     again, MedicomSkills the medical terms. Rooms already playing keep the
+     words they were dealt (the server never changed them). */
+  socket.on('resetBank', () => {
+    if (DEFAULT_BANK) Object.assign(gameSettings, JSON.parse(JSON.stringify(DEFAULT_BANK)));
+    bankCustomised = false;
+    dashboardUpdate(); socket.emit('settingsSaved'); socket.emit('bankReset');
+  });
   socket.on('updateSettings', data => { if (data && (data.vocabX || data.vocabY)) bankCustomised = true; Object.assign(gameSettings, data); Object.keys(rooms).forEach(rid=>io.to(rid).emit('settingsUpdated',gameSettings)); dashboardUpdate(); socket.emit('settingsSaved'); });
   socket.on('triggerPairing', () => {
     const scopes = [...new Set(waitingQueue.map(id=>matchmakingScope(students[id])))];
