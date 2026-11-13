@@ -313,7 +313,7 @@ td.cell:focus-visible{outline:3px solid #fff;outline-offset:-3px;position:relati
     <div class="logo-sub">Vocabulary Speaking Game</div>
     <span class="ship-art">🚢</span>
     <div class="mode-picker" aria-label="Choose game mode">
-      <button class="mode-option on" id="modeMulti" type="button" onclick="setGameMode('multiplayer')"><strong id="multiTitle">⚔ Play someone online</strong><span id="multiDescription">Join a private match with another learner.</span></button>
+      <button class="mode-option on" id="modeMulti" type="button" onclick="setGameMode('multiplayer')"><strong id="multiTitle">⚔ Play your class</strong><span id="multiDescription">Live matches are for class members only.</span></button>
       <button class="mode-option" id="modeSolo" type="button" onclick="setGameMode('solo')"><strong>🤖 Play solo</strong><span>Practise immediately against Captain Lexi.</span></button>
     </div>
     <div class="field-group"><label>Your Name</label><input id="loginName" type="text" placeholder="e.g. Yamada Yuki" autocomplete="off"></div>
@@ -934,7 +934,7 @@ function setGameMode(mode){
   const classroomStudent=launchProfile?.role==='student'&&launchProfile?.classroomId;
   document.getElementById('multiTitle').textContent=classroomStudent?'⚔ Play a classmate':'⚔ Play someone online';
   document.getElementById('multiDescription').textContent=classroomStudent?'Only learners in your class can enter this match.':'Join a private match with another individual learner.';
-  document.getElementById('modeNote').textContent=mode==='solo'?'Start immediately. Captain Lexi manages the opposing fleet.':classroomStudent?'You will only be matched with someone currently online in your class.':'You will be matched with another individual learner who is online.';
+  document.getElementById('modeNote').textContent=mode==='solo'?'Start immediately. Captain Lexi manages the opposing fleet.':classroomStudent?'You will only be matched with someone currently online in your class.':'Live matches are for classes. You will play Captain Lexi.';
   document.getElementById('loginButton').textContent=mode==='solo'?'⚓ Start solo practice':'⚓ Find my opponent';
 }
 function doLogin(){

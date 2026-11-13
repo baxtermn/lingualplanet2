@@ -717,6 +717,9 @@ io.on('connection', socket => {
     // individual) gets a generated id so they can still play.
     if (!name) { socket.emit('loginError', { message:'Please enter your name.' }); return; }
     if (!studentId) studentId = 'guest_' + Math.random().toString(36).slice(2, 10);
+    /* Live matches are for classes only (owner's rule): anyone who is not a
+       class student — individuals, teachers playing, guests — plays Captain Lexi. */
+    if (!(role === 'student' && classroomId)) mode = 'solo';
     const existing = students[studentId];
 
     if (existing) {
